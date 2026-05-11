@@ -55,7 +55,7 @@ export default function Home() {
         aria-label="On this page"
         className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md"
       >
-        <div className="mx-auto flex max-w-3xl gap-2 px-4 py-3 md:px-8">
+        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3 md:px-8">
           <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {NAV_SECTIONS.map(({ href, label }) => (
               <a
@@ -67,14 +67,22 @@ export default function Home() {
               </a>
             ))}
           </div>
+          <Button asChild variant="secondary" size="sm" className="shrink-0">
+            <Link href="/stick-fighter">Stick fighter</Link>
+          </Button>
         </div>
       </nav>
 
       <div className="mx-auto max-w-3xl px-4 py-12 md:px-8">
-        <header className="mb-12 space-y-3">
-          <h1 className="font-heading text-3xl font-semibold tracking-tight">
-            Welcome
-          </h1>
+        <header className="mb-12 space-y-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <h1 className="font-heading text-3xl font-semibold tracking-tight">
+              Welcome
+            </h1>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/stick-fighter">Stick fighter minigame</Link>
+            </Button>
+          </div>
           <p className="text-sm leading-relaxed text-muted-foreground">
             This is the landing page for your bar-inventory template. Everything
             below is plain text and layout in one file — you can change any of
@@ -995,6 +1003,9 @@ export default function Home() {
               <div className="flex flex-wrap gap-3">
                 <Button asChild size="lg">
                   <Link href="/ingredients">Add an ingredient</Link>
+                </Button>
+                <Button asChild size="lg" variant="outline">
+                  <Link href="/stick-fighter">Play stick fighter</Link>
                 </Button>
               </div>
               <p>
