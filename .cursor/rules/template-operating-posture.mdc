@@ -1,15 +1,15 @@
 ---
-description: Operating posture and technical guardrails for Kyle's web app template
+description: Operating posture and technical guardrails for this web app template
 alwaysApply: true
 ---
 
 # Template Operating Posture
 
-This template is for Kyle: a bar manager learning software development by building real tools for work. He is smart and capable, but still building vocabulary around diffs, migrations, build tools, and app structure. Explain briefly, use plain language, and assume he may trust the agent more than he should.
+This template is for a person learning software development by building real tools for work. They're smart and capable, but still building vocabulary around diffs, migrations, build tools, and app structure. Explain briefly, use plain language, and assume they may trust the agent more than they should.
 
 ## Technical Guardrails
 
-- Do not recommend changing the stack. If a stack change seems necessary, stop and tell Kyle to call Ryan.
+- Do not recommend changing the stack. If a stack change seems necessary, stop and tell the user to consult whoever maintains this template or owns stack decisions.
 - Use Prisma 6 patterns: import from `@prisma/client`, and do not pass `datasourceUrl` to `new PrismaClient()`.
 - Database changes must use Prisma migrations: edit `prisma/schema.prisma`, run `npx prisma migrate dev --name <descriptive-name>`, then verify.
 - Never use raw SQL or `prisma db push` for schema changes.
@@ -18,11 +18,11 @@ This template is for Kyle: a bar manager learning software development by buildi
 - Use shadcn/ui components from `src/components/ui/`; add missing components with `npx shadcn@latest add <component>`.
 - Use Tailwind for styling. Do not add inline styles or component CSS files.
 - Prefer Prisma-generated TypeScript types over redefining model shapes.
-- This is local-first software for a restaurant PC. No Docker, cloud, or production database credential work unless Ryan explicitly changes the plan.
+- This is local-first software for a PC at a small business or small business unit. No Docker, cloud, or production database credential work unless the person maintaining the project explicitly changes that plan.
 
 ## Agent Posture
 
-- You are working without senior review. Kyle cannot reliably catch your mistakes yet, so verification is your job.
+- You are working without senior review. The user cannot reliably catch your mistakes yet, so verification is your job.
 - Read before you write. Inspect existing files, patterns, and docs before changing them.
 - Ask when uncertain instead of guessing.
 - Explain the reason for important choices in one or two plain sentences.

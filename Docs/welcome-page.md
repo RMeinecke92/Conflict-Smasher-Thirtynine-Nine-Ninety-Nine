@@ -4,9 +4,15 @@ This is the landing page for your bar-inventory template. Everything below is pl
 
 ---
 
-## Hi Kyle
+## Things to remember
 
-*Ryan will paste a proper hello here when he's ready — this spot is for the note only he would write you.*
+1. Things will go wrong lol
+2. Things will break
+3. That's okay do not give up.
+4. Half of the battle is making a decision and sticking to it even if it isn't optimal.
+5. Be curious. Learn. Grow. Google shit. Watch youtube videos. Not just about AI but about software in general.
+
+Before you know it you'll be creating things people have never dreamed of.
 
 ---
 

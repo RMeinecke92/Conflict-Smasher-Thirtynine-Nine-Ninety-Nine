@@ -25,7 +25,7 @@ function InlineCode({ children }: { children: ReactNode }) {
 }
 
 const NAV_SECTIONS = [
-  { href: "#hi-kyle", label: "Hi Kyle" },
+  { href: "#things-to-remember", label: "Things to remember" },
   { href: "#what-is-a-web-app-you-ask", label: "What is a web app, you ask?" },
   {
     href: "#well-how-do-i-change-all-of-this-you-ask",
@@ -91,25 +91,13 @@ export default function Home() {
         </header>
 
         <div className="flex flex-col gap-12">
-          <Card id="hi-kyle" className="scroll-mt-32">
+          <Card id="things-to-remember" className="scroll-mt-32">
             <CardHeader>
               <CardTitle className="font-heading text-xl font-semibold tracking-tight">
-                Hi Kyle
+                Things to remember
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 text-sm leading-relaxed text-muted-foreground">
-              <p>
-                Web development with AI is not hard. It&apos;s a game like any
-                other. I have seen you get better at basically just about
-                everything we have ever both tried lol. Judo, video games, music,
-                school, and I am sure web development will be no different. What
-                I have built for you here is a starter template that has some
-                good info on how to get started and some &quot;skills&quot; the
-                AI agents can use to help get you started.
-              </p>
-              <p className="font-medium text-foreground">
-                Here are some things to remember
-              </p>
               <ol className="list-decimal space-y-2 pl-5">
                 <li>Things will go wrong lol</li>
                 <li>Things will break</li>
