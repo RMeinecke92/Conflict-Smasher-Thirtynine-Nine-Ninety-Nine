@@ -27,6 +27,8 @@ If PowerShell blocks the script, open PowerShell in this folder and run:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1
 ```
 
+If Windows shows **Access denied**, **Unauthorized access**, or repeated `winget` errors during setup, open **`SETUP.md`** and follow the Windows troubleshooting steps under **Automatic Setup**.
+
 When it finishes, start the app:
 
 ```powershell

@@ -18,6 +18,22 @@ If PowerShell blocks the script, run:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1
 ```
 
+### Windows: “Access denied”, “Unauthorized access”, or winget errors
+
+Those messages usually mean Windows blocked an install or write because the session does not have permission, or because something on the machine (policy or antivirus) interfered. Try these in order:
+
+1. **Run PowerShell as Administrator once.** Right-click PowerShell → **Run as administrator**, `cd` into this project folder, then run `.\setup.ps1` again. Some `winget` installs touch locations that only succeed when elevated.
+
+2. **If you extracted a ZIP or cloned from the internet**, Windows may mark files as untrusted. Right‑click the project folder → **Properties** → if you see **Unblock**, enable it and apply. Or from the project root in PowerShell:
+
+   ```powershell
+   Unblock-File -Path .\setup.ps1
+   ```
+
+3. **If `winget` keeps failing** (common on locked-down work PCs), install **Node.js (LTS)**, **Git**, and **Cursor** yourself from the official installers or Microsoft Store, then follow **[Manual Setup](#manual-setup)** below so you skip `winget` entirely.
+
+4. **Office or school PCs** sometimes enforce policies that block script policy changes or package managers. Use the bypass command above for scripts; if installs still fail, Manual Setup plus IT-approved installers is the reliable path.
+
 The script may ask before changing the script policy for your user account. Type `Y` only if you want it to set `CurrentUser` to `RemoteSigned`.
 
 If the script says `winget` is missing, update Windows or install App Installer from the Microsoft Store, then re-run the script.
@@ -153,6 +169,8 @@ Open the browser tab Prisma gives you and click the `Ingredient` table.
 This is a friendly view of the actual local database.
 
 ## 8. Common Problems
+
+If `setup.ps1` fails with **Access denied** or **Unauthorized access**, read the Windows troubleshooting bullet list under **Automatic Setup** above.
 
 If `npm` is not recognized, Node.js is not installed or PowerShell needs to be reopened.
 
