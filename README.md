@@ -123,6 +123,25 @@ Opens a browser view of the local SQLite database.
 - `prisma/schema.prisma` describes the database tables.
 - `prisma/migrations/` contains the database history.
 - `Docs/Master Plan.md` explains the build plan and design choices.
+- `.cursor/rules/` holds standing instructions for the AI in Cursor.
+- `.cursor/skills/` holds **skills** — focused workflows for specific moments (see below).
+
+## Cursor skills
+
+Inside `.cursor/skills/`, each folder is one **skill**: instructions the agent follows when your message fits that situation.
+
+This template ships with four:
+
+| Skill | When to use it |
+| ----- | -------------- |
+| **get-started** | You are not sure what to build first. It walks you through orienting questions and can help you create a root `PLAN.md`. |
+| **lets-continue** | You are coming back after a few days and forgot where you were. |
+| **grill-me** | You want to stress-test an idea before any code; the agent asks tough questions first. |
+| **phase-briefings** | You are working from a saved plan and want the next phase explained in plain English before files change. |
+
+**How to use them:** In Cursor’s chat, describe what you need in plain language. Examples: “Get started”, “Help me start”, “Let’s continue”, “Grill me before I build this”, “Start the next phase”, “Explain phase 2”. The agent matches the right skill; you do not need the exact folder name.
+
+For full triggers and workflow steps, open `.cursor/skills/<skill-name>/SKILL.md`.
 
 ## Important Rules
 
