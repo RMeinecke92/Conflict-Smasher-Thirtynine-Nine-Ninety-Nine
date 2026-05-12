@@ -1,141 +1,212 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  attackArmMultiplier,
+  createInitialGameState,
+  FLOOR,
+  MAX_HP,
+  TICK_MS,
+  type Fighter,
+  type GameInputs,
+  type GameState,
+  type PlayerInput,
+  isBlocking,
+  isGrounded,
+  stepGame,
+  VIEW_H,
+  VIEW_W,
+  WEAPONS,
+} from "@/lib/stick-fighter/simulation";
 
-const VIEW_W = 720;
-const VIEW_H = 380;
-const FLOOR = VIEW_H - 44;
-const GRAVITY = 0.62;
-const MOVE_SPEED = 4.4;
-const MOVE_WHILE_BLOCKING = 1.4;
-const JUMP_V = -11.5;
-const BLOCK_STUN_ATTACKER = 16;
-const BLOCK_ADV_DEFENDER_FRAMES = 14;
-const BLOCK_PUSHBACK = 2.75;
-const KNOCKBACK_HIT = 5.5;
-const MAX_HP = 100;
+const MAX_STEPS_PER_FRAME = 5;
 
-const WEAPONS = [
-  {
-    name: "Fists",
-    damage: 9,
-    atkDur: 14,
-    cooldown: 26,
-    hitHigh: 11,
-    hitLow: 4,
-    boxW: 46,
-    boxH: 28,
-    reach: 10,
-    color: "#94a3b8",
-  },
-  {
-    name: "Baton",
-    damage: 12,
-    atkDur: 16,
-    cooldown: 34,
-    hitHigh: 12,
-    hitLow: 5,
-    boxW: 62,
-    boxH: 30,
-    reach: 14,
-    color: "#c4b5fd",
-  },
-  {
-    name: "Spear",
-    damage: 15,
-    atkDur: 18,
-    cooldown: 44,
-    hitHigh: 13,
-    hitLow: 5,
-    boxW: 86,
-    boxH: 22,
-    reach: 20,
-    color: "#fde047",
-  },
-] as const;
+/** Deterministic [0, 1); stable across platforms for fixed inputs. */
+function det01(n: number, salt: number): number {
+  let v = Math.imul(n ^ salt, 0x9e3779b1) >>> 0;
+  v ^= v << 13;
+  v ^= v >>> 17;
+  v ^= v << 5;
+  return (v >>> 0) / 0x1_0000_0000;
+}
 
-type Fighter = {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  facing: 1 | -1;
-  hp: number;
-  weapon: number;
-  atkFrame: number;
-  atkCd: number;
-  hitFlash: number;
-  atkLanded: boolean;
-  blockStun: number;
-  frameAdv: number;
-  blockFlash: number;
-  advFlash: number;
-  /** edge-detect weapon cycle key */
-  lastWeaponKey: boolean;
+const MOUNTAIN_STEP = 18;
+
+function buildSilhouettePath(
+  baseY: number,
+  amp: number,
+  baseH: number,
+  salt: number,
+): Path2D {
+  const pth = new Path2D();
+  pth.moveTo(0, VIEW_H);
+  pth.lineTo(0, baseY);
+  for (let x = 0; x <= VIEW_W + MOUNTAIN_STEP; x += MOUNTAIN_STEP) {
+    const k = (x / MOUNTAIN_STEP) | 0;
+    const dip = det01(k, salt) * amp;
+    pth.lineTo(x, baseY - baseH - dip);
+  }
+  pth.lineTo(VIEW_W + 40, VIEW_H);
+  pth.closePath();
+  return pth;
+}
+
+let cachedPathSilFar: Path2D | null = null;
+let cachedPathSilMid: Path2D | null = null;
+
+function silhouettePaths(): [Path2D, Path2D] {
+  if (!cachedPathSilFar || !cachedPathSilMid) {
+    cachedPathSilFar = buildSilhouettePath(238, 72, 48, 0x5eed_0001);
+    cachedPathSilMid = buildSilhouettePath(272, 48, 30, 0x9abc_0002);
+  }
+  return [cachedPathSilFar, cachedPathSilMid];
+}
+
+const SCUFFS: ReadonlyArray<{
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}> = (() => {
+  const out: { x0: number; y0: number; x1: number; y1: number }[] = [];
+  for (let i = 0; i < 8; i++) {
+    const x = 28 + det01(i, 0x700d) * (VIEW_W - 56);
+    const y = FLOOR + 4.5 + det01(i, 0x90ad) * 2.5;
+    const len = 3 + det01(i, 0xabba) * 5.5;
+    const ang = (det01(i, 0x600d) - 0.5) * 0.95;
+    out.push({
+      x0: x,
+      y0: y,
+      x1: x + Math.cos(ang) * len,
+      y1: y + Math.sin(ang) * len * 0.22,
+    });
+  }
+  return out;
+})();
+
+let cachedSkyGrad: CanvasGradient | null = null;
+let cachedHazeGrad: CanvasGradient | null = null;
+let cachedHazeHorizGrad: CanvasGradient | null = null;
+let cachedVignetteGrad: CanvasGradient | null = null;
+
+function skyGradientFor(ctx: CanvasRenderingContext2D): CanvasGradient {
+  if (!cachedSkyGrad) {
+    const g = ctx.createLinearGradient(0, 0, 0, VIEW_H);
+    g.addColorStop(0, "#0b1220");
+    g.addColorStop(0.52, "#3b2a4a");
+    g.addColorStop(1, "#6b4a5a");
+    cachedSkyGrad = g;
+  }
+  return cachedSkyGrad;
+}
+
+function hazeGradientFor(ctx: CanvasRenderingContext2D): CanvasGradient {
+  if (!cachedHazeGrad) {
+    const g = ctx.createLinearGradient(0, FLOOR - 92, 0, FLOOR + 8);
+    g.addColorStop(0, "rgba(110, 88, 120, 0)");
+    g.addColorStop(0.55, "rgba(82, 66, 96, 0.28)");
+    g.addColorStop(1, "rgba(58, 48, 68, 0.48)");
+    cachedHazeGrad = g;
+  }
+  return cachedHazeGrad;
+}
+
+function hazeHorizGradientFor(ctx: CanvasRenderingContext2D): CanvasGradient {
+  if (!cachedHazeHorizGrad) {
+    const g = ctx.createLinearGradient(0, 0, VIEW_W, 0);
+    g.addColorStop(0, "rgba(55, 45, 68, 0.34)");
+    g.addColorStop(0.48, "rgba(95, 80, 108, 0.06)");
+    g.addColorStop(1, "rgba(55, 45, 68, 0.34)");
+    cachedHazeHorizGrad = g;
+  }
+  return cachedHazeHorizGrad;
+}
+
+function vignetteGradientFor(ctx: CanvasRenderingContext2D): CanvasGradient {
+  if (!cachedVignetteGrad) {
+    const g = ctx.createRadialGradient(
+      VIEW_W * 0.5,
+      VIEW_H * 0.42,
+      VIEW_W * 0.18,
+      VIEW_W * 0.5,
+      VIEW_H * 0.48,
+      VIEW_W * 0.78,
+    );
+    g.addColorStop(0, "rgba(0,0,0,0)");
+    g.addColorStop(1, "rgba(5,4,8,0.52)");
+    cachedVignetteGrad = g;
+  }
+  return cachedVignetteGrad;
+}
+
+function drawBackground(ctx: CanvasRenderingContext2D, time: number) {
+  ctx.fillStyle = skyGradientFor(ctx);
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+
+  const [pathFar, pathMid] = silhouettePaths();
+
+  ctx.fillStyle = "#362944";
+  ctx.fill(pathFar);
+
+  ctx.fillStyle = "#1e1828";
+  ctx.fill(pathMid);
+
+  ctx.save();
+  ctx.translate(Math.sin(time * 0.014) * 6, 0);
+  ctx.globalAlpha = 0.88;
+  ctx.fillStyle = hazeGradientFor(ctx);
+  ctx.fillRect(-24, FLOOR - 98, VIEW_W + 48, 102);
+  ctx.globalAlpha = 0.42;
+  ctx.fillStyle = hazeHorizGradientFor(ctx);
+  ctx.fillRect(-24, FLOOR - 90, VIEW_W + 48, 78);
+  ctx.restore();
+  ctx.globalAlpha = 1;
+
+  ctx.fillStyle = "#0d1016";
+  ctx.fillRect(0, FLOOR + 6, VIEW_W, VIEW_H - (FLOOR + 6));
+
+  ctx.strokeStyle = "rgba(200,190,210,0.42)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, FLOOR + 6);
+  ctx.lineTo(VIEW_W, FLOOR + 6);
+  ctx.stroke();
+
+  ctx.strokeStyle = "rgba(0,0,0,0.32)";
+  ctx.lineWidth = 1;
+  for (const s of SCUFFS) {
+    ctx.beginPath();
+    ctx.moveTo(s.x0, s.y0);
+    ctx.lineTo(s.x1, s.y1);
+    ctx.stroke();
+  }
+}
+
+function drawForegroundVignette(ctx: CanvasRenderingContext2D) {
+  ctx.fillStyle = vignetteGradientFor(ctx);
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+}
+
+type LandAnim = {
+  wasAirborne: [boolean, boolean];
+  landSquash: [number, number];
 };
 
-function makeFighter(x: number, facing: 1 | -1): Fighter {
-  return {
-    x,
-    y: FLOOR,
-    vx: 0,
-    vy: 0,
-    facing,
-    hp: MAX_HP,
-    weapon: 0,
-    atkFrame: 0,
-    atkCd: 0,
-    hitFlash: 0,
-    atkLanded: false,
-    blockStun: 0,
-    frameAdv: 0,
-    blockFlash: 0,
-    advFlash: 0,
-    lastWeaponKey: false,
-  };
+function updateLandAnim(fighters: [Fighter, Fighter], anim: LandAnim) {
+  for (let i = 0; i < 2; i++) {
+    const f = fighters[i];
+    const grounded = isGrounded(f);
+    if (grounded && anim.wasAirborne[i]) {
+      anim.landSquash[i] = 4;
+    }
+    anim.wasAirborne[i] = !grounded;
+  }
 }
 
-function isGrounded(fighter: Fighter) {
-  return fighter.y >= FLOOR - 1;
-}
-
-function isBlocking(fighter: Fighter, holdBlock: boolean) {
-  return holdBlock && isGrounded(fighter);
-}
-
-function attackHitbox(f: Fighter) {
-  const W = WEAPONS[f.weapon];
-  if (f.atkFrame <= 0) return null;
-  if (f.atkFrame > W.hitHigh || f.atkFrame < W.hitLow) return null;
-  const w = W.boxW;
-  const h = W.boxH;
-  const x =
-    f.facing === 1 ? f.x + W.reach : f.x - W.reach - w;
-  return { x, y: f.y - 62, w, h };
-}
-
-function hurtbox(fighter: Fighter) {
-  return { x: fighter.x - 18, y: fighter.y - 72, w: 36, h: 72 };
-}
-
-function rectsOverlap(
-  a: { x: number; y: number; w: number; h: number },
-  b: { x: number; y: number; w: number; h: number },
-) {
-  return (
-    a.x < b.x + b.w &&
-    a.x + a.w > b.x &&
-    a.y < b.y + b.h &&
-    a.y + a.h > b.y
-  );
-}
-
-/** Lead arm reaches farther during active hit frames */
-function attackArmMultiplier(f: Fighter) {
-  const W = WEAPONS[f.weapon];
-  const inHit =
-    f.atkFrame > 0 && f.atkFrame <= W.hitHigh && f.atkFrame >= W.hitLow;
-  return inHit ? 1 : 0.4;
+function afterDrawDecrementLandSquash(anim: LandAnim) {
+  for (let i = 0; i < 2; i++) {
+    if (anim.landSquash[i] > 0) anim.landSquash[i] -= 1;
+  }
 }
 
 function drawStick(
@@ -144,90 +215,263 @@ function drawStick(
   fighterColor: string,
   blocking: boolean,
   time: number,
+  fighterIndex: 0 | 1,
+  landAnim: LandAnim,
 ) {
   const W = WEAPONS[f.weapon];
-  const bob =
-    f.atkFrame > 0 && !blocking ? Math.sin(f.atkFrame * 0.9) * 3 : 0;
+  const grounded = isGrounded(f);
   const cx = f.x;
   const footY = f.y;
-  const lean =
-    blocking || f.atkFrame === 0 ? 0 : f.facing * (f.atkFrame > W.atkDur * 0.4 ? 12 : 0);
+  const crouchHold = grounded && f.crouching && !blocking;
+
+  const breath =
+    grounded &&
+    !crouchHold &&
+    Math.abs(f.vx) <= 0.5 &&
+    f.atkFrame === 0
+      ? Math.sin(time * 0.05 + f.x * 0.1) * 1.5
+      : 0;
+
+  const walking =
+    grounded &&
+    Math.abs(f.vx) > 0.5 &&
+    !blocking &&
+    f.atkFrame === 0 &&
+    !f.crouching;
+  const leg0 = Math.sin(time * 0.25);
+  const leg1 = Math.sin(time * 0.25 + Math.PI);
+  const liftL = walking ? Math.max(0, leg0) * 5 : 0;
+  const liftR = walking ? Math.max(0, leg1) * 5 : 0;
+  const strideSpread = walking ? leg0 * 4 * f.facing : 0;
+
+  let attackLean = 0;
+  if (!blocking && f.atkFrame > 0) {
+    const dur = W.atkDur;
+    const hi = W.hitHigh;
+    const lo = W.hitLow;
+    if (f.atkFrame > hi) {
+      const windupLen = Math.max(1, dur - hi);
+      const wt = (f.atkFrame - hi) / windupLen;
+      attackLean = -f.facing * 8 * wt;
+    } else if (f.atkFrame >= lo) {
+      attackLean = f.facing * 16;
+    } else {
+      const denom = Math.max(1, lo - 1);
+      attackLean = f.facing * 16 * (f.atkFrame / denom);
+    }
+  }
+
+  const leanX = attackLean;
+  const hitT = f.hitFlash > 0 ? f.hitFlash / 8 : 0;
+  const spineTilt = -f.facing * 0.11 * hitT;
+  const headLagX = -f.facing * 7 * hitT;
+
+  let torsoSy = 1;
+  let torsoSx = 1;
+  if (!grounded && f.atkFrame === 0 && !blocking) {
+    if (f.vy < -0.35) {
+      torsoSy = 1.07;
+      torsoSx = 0.93;
+    } else if (f.vy > 0.35) {
+      torsoSy = 0.93;
+      torsoSx = 1.06;
+    }
+  }
+  const sq = landAnim.landSquash[fighterIndex];
+  if (sq > 0) {
+    const k = sq * 0.25;
+    torsoSy *= 1 - 0.11 * k;
+    torsoSx *= 1 + 0.09 * k;
+  }
+
+  let headRx = 11;
+  let headRy = 11;
+  if (!grounded && f.atkFrame === 0 && !blocking) {
+    if (f.vy < -0.35) {
+      headRx = 9.5;
+      headRy = 12.2;
+    } else if (f.vy > 0.35) {
+      headRx = 11.8;
+      headRy = 9.8;
+    }
+  }
+
+  const tuck = blocking ? 3 : 0;
+  const cd = crouchHold ? 1 : 0;
+  const headDrop = 22 * cd;
+  const shoulderDrop = 17 * cd;
+  const hipDrop = 13 * cd;
+  const headY =
+    footY - 78 + breath * (1 - cd) * 0.95 + headDrop - tuck * 0.6;
+  const headX = cx + leanX * 0.14 + headLagX;
+  const shoulderY =
+    footY - 58 + breath * (1 - cd) * 0.88 + shoulderDrop - tuck * 0.5;
+  const hipY = footY - 30 + breath * (1 - cd) * 0.55 + hipDrop;
+
+  const offArmSwing =
+    walking ? -leg1 * 6 * (f.vx >= 0 ? 1 : -1) * f.facing : 0;
+
+  ctx.save();
+  const pivotY = footY - 36 + cd * 10;
+  ctx.translate(cx, pivotY);
+  ctx.rotate(spineTilt);
+  ctx.scale(torsoSx, torsoSy);
+  ctx.translate(-cx, -pivotY);
 
   ctx.lineWidth = 3.5;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-
-  const headY = footY - 78 + bob;
   ctx.strokeStyle = blocking ? `${fighterColor}cc` : fighterColor;
+
   ctx.beginPath();
-  ctx.arc(cx + lean * 0.15, headY, 11, 0, Math.PI * 2);
+  ctx.ellipse(headX, headY, headRx, headRy, 0, 0, Math.PI * 2);
   ctx.stroke();
 
-  const shoulderY = footY - 58 + bob;
   ctx.beginPath();
-  ctx.moveTo(cx + lean * 0.2, headY + 11);
-  ctx.lineTo(cx + lean * 0.2, shoulderY + 28);
-  ctx.stroke();
-
-  const armExt =
-    blocking ? 10 : (12 + W.reach * 2.8) * attackArmMultiplier(f);
-  const leadX = blocking
-    ? cx - 20 * f.facing + lean
-    : cx + armExt * f.facing + lean;
-
-  ctx.beginPath();
-  ctx.moveTo(cx + lean * 0.2, shoulderY);
-  ctx.lineTo(leadX, shoulderY - 6 + bob * 0.3);
-  ctx.stroke();
-
-  if (!blocking && f.weapon > 0 && f.atkFrame > 0) {
-    ctx.strokeStyle = W.color;
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(cx + lean * 0.15 + f.facing * 8, shoulderY - 4);
-    const span = armExt + 42;
-    ctx.lineTo(
-      cx + lean * 0.2 + (f.facing === 1 ? span : -span),
-      shoulderY + 6 + bob * 0.2,
-    );
-    ctx.stroke();
-    ctx.lineWidth = 3.5;
-    ctx.strokeStyle = fighterColor;
-  }
-
-  ctx.beginPath();
-  ctx.moveTo(cx + lean * 0.2, shoulderY);
+  ctx.moveTo(cx + leanX * 0.18, headY + headRy * 0.85);
   ctx.lineTo(
-    blocking ? cx + 18 * f.facing : cx - 18 * f.facing + lean * 0.3,
-    shoulderY + (blocking ? 6 : 14) + bob * 0.2,
+    cx + leanX * 0.2,
+    shoulderY + 28 - cd * 14,
   );
   ctx.stroke();
 
-  const stride =
-    Math.sin(time * 0.012 + f.x * 0.02) * (Math.abs(f.vx) > 0.5 ? 1 : 0);
-  ctx.strokeStyle = fighterColor + (blocking ? "99" : "");
-  ctx.beginPath();
-  ctx.moveTo(cx + lean * 0.2, footY - 30 + bob);
-  ctx.lineTo(cx - 10 * f.facing - stride * 6 - (blocking ? 4 * f.facing : 0), footY);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(cx + lean * 0.2, footY - 30 + bob);
-  ctx.lineTo(cx + 10 * f.facing + stride * 6 + (blocking ? 4 * f.facing : 0), footY);
-  ctx.stroke();
+  const shX = cx + leanX * 0.2;
+  const shY = shoulderY;
 
   if (blocking) {
-    ctx.strokeStyle = "rgba(248,250,252,0.5)";
-    ctx.lineWidth = 2;
+    const gx = cx + f.facing * 20;
+    const gy = headY + 8;
+    ctx.beginPath();
+    ctx.moveTo(shX - 5 * f.facing, shY);
+    ctx.lineTo(gx, gy);
+    ctx.moveTo(shX + 5 * f.facing, shY);
+    ctx.lineTo(gx, gy);
+    ctx.stroke();
+  } else {
+    const Wpn = W;
+    let shoulderAngle = 0;
+    if (f.atkFrame > 0) {
+      if (f.atkFrame > Wpn.hitHigh) {
+        const windupLen = Math.max(1, Wpn.atkDur - Wpn.hitHigh);
+        const wt = (f.atkFrame - Wpn.hitHigh) / windupLen;
+        shoulderAngle = -f.facing * (0.78 * wt);
+      } else if (f.atkFrame >= Wpn.hitLow) {
+        shoulderAngle = f.facing * 0.05;
+      } else {
+        const denom = Math.max(1, Wpn.hitLow - 1);
+        shoulderAngle = f.facing * 0.05 * (f.atkFrame / denom);
+      }
+    }
+
+    const armExt =
+      (12 + Wpn.reach * 2.8) * attackArmMultiplier(f);
+    const reachX = shX + f.facing * armExt * Math.cos(shoulderAngle);
+    const reachY = shY - 6 + breath * 0.28 + Math.sin(shoulderAngle) * armExt * 0.35;
+
+    ctx.beginPath();
+    ctx.moveTo(shX, shY);
+    ctx.lineTo(reachX, reachY);
+    ctx.stroke();
+
+    const backArmX = shX - f.facing * 18 + leanX * 0.28 + offArmSwing;
+    ctx.beginPath();
+    ctx.moveTo(shX, shY);
+    ctx.lineTo(backArmX, shoulderY + 14 + breath * 0.18);
+    ctx.stroke();
+
+    if (f.weapon > 0 && f.atkFrame > 0) {
+      let wAng = 0;
+      if (f.atkFrame > Wpn.hitHigh) {
+        const windupLen = Math.max(1, Wpn.atkDur - Wpn.hitHigh);
+        const wt = (f.atkFrame - Wpn.hitHigh) / windupLen;
+        wAng = -f.facing * (0.95 - wt * 0.45);
+      } else if (f.atkFrame >= Wpn.hitLow) {
+        wAng = -f.facing * 0.06;
+      } else {
+        wAng =
+          -f.facing * 0.06 * (f.atkFrame / Math.max(1, Wpn.hitLow - 1));
+      }
+
+      const span = armExt + 38;
+      ctx.strokeStyle = Wpn.color;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      const wx0 = shX + f.facing * 6 + leanX * 0.08;
+      const wy0 = shoulderY - 5 + breath * 0.15;
+      ctx.moveTo(wx0, wy0);
+      ctx.lineTo(
+        wx0 + Math.cos(wAng) * span * f.facing,
+        wy0 + Math.sin(wAng) * span * 0.35,
+      );
+      ctx.stroke();
+      ctx.lineWidth = 3.5;
+      ctx.strokeStyle = fighterColor;
+    }
+  }
+
+  ctx.beginPath();
+  ctx.moveTo(shX, shY);
+  ctx.lineTo(shX, hipY);
+  ctx.stroke();
+
+  if (!blocking) {
+    if (crouchHold) {
+      const kneeY = footY - 24;
+      const footXL = cx - 19 * f.facing;
+      const footXR = cx + 19 * f.facing;
+      const kneeXL = cx - 30 * f.facing;
+      const kneeXR = cx + 30 * f.facing;
+      ctx.beginPath();
+      ctx.moveTo(shX, hipY);
+      ctx.lineTo(kneeXL, kneeY);
+      ctx.lineTo(footXL, footY);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(shX, hipY);
+      ctx.lineTo(kneeXR, kneeY);
+      ctx.lineTo(footXR, footY);
+      ctx.stroke();
+    } else {
+      const lfX = cx - 10 * f.facing - strideSpread;
+      const rfX = cx + 10 * f.facing + strideSpread;
+      ctx.beginPath();
+      ctx.moveTo(shX, hipY);
+      ctx.lineTo(lfX, footY - liftL);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(shX, hipY);
+      ctx.lineTo(rfX, footY - liftR);
+      ctx.stroke();
+    }
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(shX, hipY);
+    ctx.lineTo(cx - 10 * f.facing + leanX * 0.12, footY);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(shX, hipY);
+    ctx.lineTo(cx + 10 * f.facing + leanX * 0.12, footY);
+    ctx.stroke();
+
+    const gx = cx + f.facing * 20;
+    const gy = headY + 8;
+    const pulse = f.blockFlash > 0 ? 0.4 * Math.sin(time * 0.38) : 0;
+    ctx.strokeStyle = `rgba(248,250,252,${0.48 + pulse})`;
+    ctx.lineWidth = 2.8 + (f.blockFlash > 0 ? 1.1 + Math.sin(time * 0.42) * 0.35 : 0);
     ctx.beginPath();
     ctx.arc(
-      cx + lean * 0.12,
-      shoulderY + 12,
-      18,
-      Math.PI * 0.92,
-      Math.PI * 2.28,
+      gx - f.facing * 3,
+      gy - 2,
+      20,
+      Math.PI * 0.9,
+      Math.PI * 2.32,
     );
     ctx.stroke();
+    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = blocking ? `${fighterColor}cc` : fighterColor;
   }
+
+  ctx.restore();
 
   if (blocking && f.blockFlash > 0) {
     ctx.fillStyle = "rgba(147,197,253,0.42)";
@@ -242,62 +486,117 @@ function drawStick(
   }
 }
 
-/** Try weapon cycle on rising edge */
-function cycleWeaponEdge(
-  fighter: Fighter,
-  keyDown: boolean,
-  armed: boolean,
-) {
-  if (!armed || fighter.atkFrame > 0 || fighter.atkCd > 0) {
-    fighter.lastWeaponKey = keyDown;
-    return;
-  }
-  if (keyDown && !fighter.lastWeaponKey)
-    fighter.weapon = (fighter.weapon + 1) % WEAPONS.length;
-  fighter.lastWeaponKey = keyDown;
+type HudState = {
+  p1: number;
+  p2: number;
+  wp1: string;
+  wp2: string;
+  msg: string;
+};
+
+const INITIAL_HUD: HudState = {
+  p1: MAX_HP,
+  p2: MAX_HP,
+  wp1: WEAPONS[0].name,
+  wp2: WEAPONS[0].name,
+  msg: "",
+};
+
+function movementInput(
+  keys: Set<string>,
+  negativeKey: string,
+  positiveKey: string,
+): PlayerInput["move"] {
+  if (keys.has(negativeKey)) return -1;
+  if (keys.has(positiveKey)) return 1;
+  return 0;
+}
+
+function snapshotInputs(keys: Set<string>): GameInputs {
+  return {
+    p1: {
+      move: movementInput(keys, "a", "d"),
+      jump: keys.has("w") || keys.has("space"),
+      attack: keys.has("f"),
+      block: keys.has("g"),
+      crouch: keys.has("s"),
+      cycleWeapon: keys.has("q"),
+    },
+    p2: {
+      move: movementInput(keys, "arrowleft", "arrowright"),
+      jump: keys.has("arrowup"),
+      attack: keys.has("k"),
+      block: keys.has("l"),
+      crouch: keys.has("arrowdown"),
+      cycleWeapon: keys.has("p"),
+    },
+  };
+}
+
+function hudFromState(state: GameState): HudState {
+  const [p1, p2] = state.fighters;
+  return {
+    p1: p1.hp,
+    p2: p2.hp,
+    wp1: WEAPONS[p1.weapon].name,
+    wp2: WEAPONS[p2.weapon].name,
+    msg: state.message,
+  };
 }
 
 export function StickFighterGame() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const keysRef = useRef<Set<string>>(new Set());
-  const fightersRef = useRef<[Fighter, Fighter]>([
-    makeFighter(VIEW_W * 0.28, 1),
-    makeFighter(VIEW_W * 0.72, -1),
-  ]);
+  const gameRef = useRef<GameState>(createInitialGameState());
+  const accumulatorRef = useRef(0);
+  const lastFrameTimeRef = useRef<number | null>(null);
   const timeRef = useRef(0);
-  const lastHudRef = useRef({ p1: MAX_HP, p2: MAX_HP, wp1: 0, wp2: 0 });
-  const hudMsgRef = useRef("");
-  const [hud, setHud] = useState<{
-    p1: number;
-    p2: number;
-    wp1: string;
-    wp2: string;
-    msg: string;
-  }>({
-    p1: MAX_HP,
-    p2: MAX_HP,
-    wp1: WEAPONS[0].name,
-    wp2: WEAPONS[0].name,
-    msg: "",
+  const roundOverRef = useRef(false);
+  const lastHudRef = useRef<HudState>(INITIAL_HUD);
+  const landAnimRef = useRef<LandAnim>({
+    wasAirborne: [false, false],
+    landSquash: [0, 0],
   });
+  const [hud, setHud] = useState<HudState>(INITIAL_HUD);
   const [roundOver, setRoundOver] = useState(false);
 
+  const syncHudFromGame = useCallback((state: GameState) => {
+    const nextHud = hudFromState(state);
+    const lastHud = lastHudRef.current;
+
+    if (
+      lastHud.p1 !== nextHud.p1 ||
+      lastHud.p2 !== nextHud.p2 ||
+      lastHud.wp1 !== nextHud.wp1 ||
+      lastHud.wp2 !== nextHud.wp2 ||
+      lastHud.msg !== nextHud.msg
+    ) {
+      lastHudRef.current = nextHud;
+      setHud(nextHud);
+    }
+
+    if (roundOverRef.current !== state.roundOver) {
+      roundOverRef.current = state.roundOver;
+      setRoundOver(state.roundOver);
+    }
+  }, []);
+
   const resetRound = useCallback(() => {
-    fightersRef.current = [
-      makeFighter(VIEW_W * 0.28, 1),
-      makeFighter(VIEW_W * 0.72, -1),
-    ];
-    lastHudRef.current = { p1: MAX_HP, p2: MAX_HP, wp1: 0, wp2: 0 };
-    hudMsgRef.current = "";
+    const nextState = createInitialGameState();
+    const nextHud = hudFromState(nextState);
+
+    gameRef.current = nextState;
+    accumulatorRef.current = 0;
+    lastFrameTimeRef.current = null;
+    roundOverRef.current = false;
+    lastHudRef.current = nextHud;
+    landAnimRef.current = {
+      wasAirborne: [false, false],
+      landSquash: [0, 0],
+    };
     setRoundOver(false);
-    setHud({
-      p1: MAX_HP,
-      p2: MAX_HP,
-      wp1: WEAPONS[0].name,
-      wp2: WEAPONS[0].name,
-      msg: "",
-    });
+    setHud(nextHud);
   }, []);
 
   useEffect(() => {
@@ -308,17 +607,21 @@ export function StickFighterGame() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    const landLocal = landAnimRef.current;
+
     const trackedKeys = [
       "a",
       "d",
       "w",
       "f",
       "s",
+      "g",
       "q",
       "arrowleft",
       "arrowright",
       "arrowup",
       "arrowdown",
+      "k",
       "l",
       "p",
     ];
@@ -330,7 +633,7 @@ export function StickFighterGame() {
         e.preventDefault();
       }
       if (code === "Space" || code === "Enter") {
-        if (down && roundOver) {
+        if (down && roundOverRef.current) {
           resetRound();
           keysRef.current.delete("space");
           return;
@@ -351,171 +654,34 @@ export function StickFighterGame() {
     window.addEventListener("keyup", ku);
 
     let raf = 0;
-    const step = () => {
-      const keys = keysRef.current;
-      const f = fightersRef.current;
-      const [p1, p2] = f;
+    const step = (now: number) => {
+      const game = gameRef.current;
       const t = timeRef.current++;
 
-      if (!roundOver) {
-        const p1BlockHold = keys.has("s");
-        const p2BlockHold = keys.has("arrowdown");
-        const b1 = isBlocking(p1, p1BlockHold);
-        const b2 = isBlocking(p2, p2BlockHold);
-
-        const p1Frozen = p1.blockStun > 0;
-        const p2Frozen = p2.blockStun > 0;
-
-        cycleWeaponEdge(p1, keys.has("q"), !b1 && !p1Frozen);
-        cycleWeaponEdge(p2, keys.has("p"), !b2 && !p2Frozen);
-
-        const m1Speed = !b1 ? MOVE_SPEED : MOVE_WHILE_BLOCKING;
-        const m2Speed = !b2 ? MOVE_SPEED : MOVE_WHILE_BLOCKING;
-
-        p1.vx = 0;
-        if (p1Frozen) {
-          /* keep frozen — no directional input */
-        } else if (keys.has("a")) {
-          p1.vx = -m1Speed;
-          if (!b1) p1.facing = -1;
-        } else if (keys.has("d")) {
-          p1.vx = m1Speed;
-          if (!b1) p1.facing = 1;
-        }
-
-        if (!b1 && !p1Frozen && (keys.has("w") || keys.has("space")) && isGrounded(p1))
-          p1.vy = JUMP_V;
-
-        if (!p1Frozen && !b1 && p1.atkFrame === 0 && keys.has("f") && p1.atkCd === 0) {
-          const W = WEAPONS[p1.weapon];
-          p1.atkFrame = W.atkDur;
-          p1.atkLanded = false;
-          p1.atkCd = W.cooldown;
-        }
-
-        p2.vx = 0;
-        if (p2Frozen) {
-          //
-        } else if (keys.has("arrowleft")) {
-          p2.vx = -m2Speed;
-          if (!b2) p2.facing = -1;
-        } else if (keys.has("arrowright")) {
-          p2.vx = m2Speed;
-          if (!b2) p2.facing = 1;
-        }
-
-        if (!b2 && !p2Frozen && keys.has("arrowup") && isGrounded(p2))
-          p2.vy = JUMP_V;
-
-        if (!p2Frozen && !b2 && p2.atkFrame === 0 && keys.has("l") && p2.atkCd === 0) {
-          const W = WEAPONS[p2.weapon];
-          p2.atkFrame = W.atkDur;
-          p2.atkLanded = false;
-          p2.atkCd = W.cooldown;
-        }
-
-        for (const fighter of [p1, p2]) {
-          fighter.x += fighter.vx;
-          fighter.y += fighter.vy;
-          fighter.vy += GRAVITY;
-          if (fighter.y > FLOOR) {
-            fighter.y = FLOOR;
-            fighter.vy = 0;
-          }
-          fighter.x = Math.max(32, Math.min(VIEW_W - 32, fighter.x));
-          if (fighter.atkFrame > 0) fighter.atkFrame--;
-
-          const adv = fighter.frameAdv > 0 ? 2 : 1;
-          if (fighter.atkCd > 0) {
-            fighter.atkCd -= adv;
-            if (fighter.atkCd < 0) fighter.atkCd = 0;
-          }
-
-          if (fighter.blockStun > 0) fighter.blockStun--;
-          if (fighter.frameAdv > 0) fighter.frameAdv--;
-          if (fighter.hitFlash > 0) fighter.hitFlash--;
-          if (fighter.blockFlash > 0) fighter.blockFlash--;
-          if (fighter.advFlash > 0) fighter.advFlash--;
-        }
-
-        const h1 = attackHitbox(p1);
-        const h2 = attackHitbox(p2);
-        const hb1 = hurtbox(p2);
-        const hb2 = hurtbox(p1);
-
-        if (h1 && !p1.atkLanded && rectsOverlap(h1, hb1)) {
-          p1.atkLanded = true;
-          if (b2) {
-            p2.blockFlash = 10;
-            p2.frameAdv = Math.max(p2.frameAdv, BLOCK_ADV_DEFENDER_FRAMES);
-            p2.advFlash = 18;
-            p1.blockStun = Math.max(p1.blockStun, BLOCK_STUN_ATTACKER);
-            p1.x -= BLOCK_PUSHBACK * p1.facing;
-            p2.x += BLOCK_PUSHBACK * p1.facing;
-          } else {
-            const W = WEAPONS[p1.weapon];
-            p2.hp -= W.damage;
-            p2.hitFlash = 8;
-            p2.vx = KNOCKBACK_HIT * p1.facing;
-            p2.vy = -3;
-          }
-        }
-        if (h2 && !p2.atkLanded && rectsOverlap(h2, hb2)) {
-          p2.atkLanded = true;
-          if (b1) {
-            p1.blockFlash = 10;
-            p1.frameAdv = Math.max(p1.frameAdv, BLOCK_ADV_DEFENDER_FRAMES);
-            p1.advFlash = 18;
-            p2.blockStun = Math.max(p2.blockStun, BLOCK_STUN_ATTACKER);
-            p2.x -= BLOCK_PUSHBACK * p2.facing;
-            p1.x += BLOCK_PUSHBACK * p2.facing;
-          } else {
-            const W = WEAPONS[p2.weapon];
-            p1.hp -= W.damage;
-            p1.hitFlash = 8;
-            p1.vx = KNOCKBACK_HIT * p2.facing;
-            p1.vy = -3;
-          }
-        }
-
-        const w1Name = WEAPONS[p1.weapon].name;
-        const w2Name = WEAPONS[p2.weapon].name;
-        const w1i = p1.weapon;
-        const w2i = p2.weapon;
-
-        if (p1.hp <= 0 || p2.hp <= 0) {
-          setRoundOver(true);
-          lastHudRef.current = {
-            p1: Math.max(0, p1.hp),
-            p2: Math.max(0, p2.hp),
-            wp1: w1i,
-            wp2: w2i,
-          };
-          const win = p1.hp <= 0 ? "Red wins!" : "Blue wins!";
-          hudMsgRef.current = win;
-          setHud({
-            p1: Math.max(0, p1.hp),
-            p2: Math.max(0, p2.hp),
-            wp1: w1Name,
-            wp2: w2Name,
-            msg: win,
-          });
-        } else {
-          const p1h = p1.hp;
-          const p2h = p2.hp;
-          if (
-            lastHudRef.current.p1 !== p1h ||
-            lastHudRef.current.p2 !== p2h ||
-            lastHudRef.current.wp1 !== w1i ||
-            lastHudRef.current.wp2 !== w2i ||
-            hudMsgRef.current !== ""
-          ) {
-            lastHudRef.current = { p1: p1h, p2: p2h, wp1: w1i, wp2: w2i };
-            hudMsgRef.current = "";
-            setHud({ p1: p1h, p2: p2h, wp1: w1Name, wp2: w2Name, msg: "" });
-          }
-        }
+      if (lastFrameTimeRef.current === null) {
+        lastFrameTimeRef.current = now;
       }
+
+      if (!game.roundOver) {
+        const elapsed = now - lastFrameTimeRef.current;
+        lastFrameTimeRef.current = now;
+        accumulatorRef.current += Math.min(elapsed, TICK_MS * MAX_STEPS_PER_FRAME);
+
+        let steps = 0;
+        while (
+          accumulatorRef.current >= TICK_MS &&
+          steps < MAX_STEPS_PER_FRAME &&
+          !game.roundOver
+        ) {
+          stepGame(game, snapshotInputs(keysRef.current));
+          accumulatorRef.current -= TICK_MS;
+          steps += 1;
+        }
+
+        syncHudFromGame(game);
+      }
+
+      updateLandAnim(game.fighters, landLocal);
 
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       const rect = wrap.getBoundingClientRect();
@@ -536,21 +702,18 @@ export function StickFighterGame() {
       ctx.save();
       ctx.scale(scale, scale);
 
-      ctx.fillStyle = "#0f1419";
-      ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-      ctx.strokeStyle = "rgba(148,163,184,0.35)";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(0, FLOOR + 6);
-      ctx.lineTo(VIEW_W, FLOOR + 6);
-      ctx.stroke();
+      drawBackground(ctx, t);
 
-      const [a, b] = fightersRef.current;
+      const [a, b] = game.fighters;
       const kSet = keysRef.current;
-      drawStick(ctx, a, "#38bdf8", isBlocking(a, kSet.has("s")), t);
-      drawStick(ctx, b, "#f87171", isBlocking(b, kSet.has("arrowdown")), t);
+      drawStick(ctx, a, "#38bdf8", isBlocking(a, kSet.has("g")), t, 0, landLocal);
+      drawStick(ctx, b, "#f87171", isBlocking(b, kSet.has("l")), t, 1, landLocal);
+
+      drawForegroundVignette(ctx);
 
       ctx.restore();
+
+      afterDrawDecrementLandSquash(landLocal);
 
       raf = requestAnimationFrame(step);
     };
@@ -561,18 +724,20 @@ export function StickFighterGame() {
       window.removeEventListener("keydown", kd);
       window.removeEventListener("keyup", ku);
     };
-  }, [resetRound, roundOver]);
+  }, [resetRound, syncHudFromGame]);
 
   return (
     <div className="space-y-4">
       <p className="text-xs leading-relaxed text-muted-foreground sm:text-sm">
-        Hold block while grounded. A successful block stuns the attacker and
-        gives you <strong className="text-foreground">frame advantage</strong>:
-        your attack cooldown drains twice as fast for a short window — you recover
-        first. Cycle weapons with{" "}
+        Hold guard while grounded (<kbd className="rounded border bg-muted px-1">G</kbd> blue,{" "}
+        <kbd className="rounded border bg-muted px-1">L</kbd> red). A successful block stuns the
+        attacker and gives you{" "}
+        <strong className="text-foreground">frame advantage</strong>:
+        your attack cooldown drains twice as fast for a short window — you recover first.
+        Crouch with <kbd className="rounded border bg-muted px-1">S</kbd> /{" "}
+        <kbd className="rounded border bg-muted px-1">↓</kbd>; cycle weapons with{" "}
         <kbd className="rounded border bg-muted px-1">Q</kbd> /{" "}
-        <kbd className="rounded border bg-muted px-1">P</kbd> (damage, reach, and
-        speed trade off).
+        <kbd className="rounded border bg-muted px-1">P</kbd>.
       </p>
       <div
         ref={wrapRef}
@@ -611,8 +776,9 @@ export function StickFighterGame() {
             <kbd className="rounded border bg-background px-1">W</kbd> or{" "}
             <kbd className="rounded border bg-background px-1">Space</kbd> ·
             Attack <kbd className="rounded border bg-background px-1">F</kbd> ·
-            Hold block <kbd className="rounded border bg-background px-1">S</kbd>{" "}
-            · Weapon <kbd className="rounded border bg-background px-1">Q</kbd>
+            Guard <kbd className="rounded border bg-background px-1">G</kbd> ·
+            Crouch <kbd className="rounded border bg-background px-1">S</kbd> ·
+            Weapon <kbd className="rounded border bg-background px-1">Q</kbd>
           </p>
           <div className="mt-2 h-2 overflow-hidden rounded-full bg-background">
             <div
@@ -631,8 +797,9 @@ export function StickFighterGame() {
             Move <kbd className="rounded border bg-background px-1">←</kbd> /{" "}
             <kbd className="rounded border bg-background px-1">→</kbd> · Jump{" "}
             <kbd className="rounded border bg-background px-1">↑</kbd> ·
-            Attack <kbd className="rounded border bg-background px-1">L</kbd> ·
-            Hold block{" "}
+            Attack <kbd className="rounded border bg-background px-1">K</kbd> ·
+            Guard{" "}
+            <kbd className="rounded border bg-background px-1">L</kbd> · Crouch{" "}
             <kbd className="rounded border bg-background px-1">↓</kbd> · Weapon{" "}
             <kbd className="rounded border bg-background px-1">P</kbd>
           </p>

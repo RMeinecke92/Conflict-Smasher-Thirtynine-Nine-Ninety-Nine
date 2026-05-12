@@ -1,9 +1,0 @@
--- CreateTable
-CREATE TABLE "Ingredient" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    "name" TEXT NOT NULL,
-    "unit" TEXT NOT NULL,
-    "costPerUnit" REAL NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
-);

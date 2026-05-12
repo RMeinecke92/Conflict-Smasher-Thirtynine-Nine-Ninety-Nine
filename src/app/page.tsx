@@ -990,9 +990,6 @@ export default function Home() {
             <CardContent className="space-y-6 text-sm leading-relaxed text-muted-foreground">
               <div className="flex flex-wrap gap-3">
                 <Button asChild size="lg">
-                  <Link href="/ingredients">Add an ingredient</Link>
-                </Button>
-                <Button asChild size="lg" variant="outline">
                   <Link href="/stick-fighter">Play stick fighter</Link>
                 </Button>
               </div>
