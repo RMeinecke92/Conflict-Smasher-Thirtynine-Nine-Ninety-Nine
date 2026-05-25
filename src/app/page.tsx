@@ -22,8 +22,8 @@ export default function Home() {
             Stick fighter
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Local two-player minigame — canvas + a tight game loop. Click the
-            game area if keys don&apos;t respond.
+            Local stick-fighting minigame — play solo vs CPU or two-player on
+            one keyboard. Click the game area if keys don&apos;t respond.
           </p>
         </header>
 

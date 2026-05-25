@@ -1,0 +1,41 @@
+---
+description: Stick Fighter master plan — read and update PLAN.md when working on the game
+alwaysApply: true
+---
+
+# Stick Fighter Master Plan
+
+The stick-fighting game is the active product. The roadmap lives in **`PLAN.md`** at the repo root.
+
+## Before stick-fighter work
+
+1. Read `PLAN.md` — especially **Currently active** and the next unchecked item.
+2. Skim recent git history (`git log -5`, `git status`) and reconcile with plan checkboxes. If the plan disagrees with the code, fix the plan or note the discrepancy in **Verification log**.
+
+## While working
+
+1. Set **exactly one** plan item to `[~]` in progress (or mark the whole phase `[~]` if doing multiple sub-bullets in one session).
+2. Update **Currently active** in `PLAN.md`:
+   - **Phase** / **Item** — what you are doing
+   - **Agent note** — one sentence
+   - **Last updated** — today’s date
+3. Do not mark items `[x]` until behavior is implemented and you ran the smallest relevant check (`npm run lint`, `npm run build`, or a described manual playtest).
+
+## When finishing
+
+1. Change `[~]` → `[x]` for completed sub-bullets (and the phase header when all sub-bullets are done).
+2. Clear **Currently active** to *(none)* or point at the next unchecked item.
+3. Add a row to **Verification log** in `PLAN.md` if the change was substantial.
+
+## Scope discipline
+
+- **Simulation** (`simulation.ts`) owns combat truth; **rendering** owns look-only effects unless the plan explicitly ties them to sim ticks.
+- Near-term plan order is a recommendation, not a strict gate — but do not start **rollback netcode** (phase 8) until phase 8 prerequisites in `PLAN.md` are met.
+- Deploy (phase 6) is allowed before characters if the user wants a shareable URL; say so in **Agent note**.
+
+## Key paths
+
+- `src/lib/stick-fighter/simulation.ts` — combat
+- `src/lib/stick-fighter/cpu.ts` — CPU
+- `src/components/stick-fighter-game.tsx` — canvas, input, HUD
+- `src/app/page.tsx` — home shell

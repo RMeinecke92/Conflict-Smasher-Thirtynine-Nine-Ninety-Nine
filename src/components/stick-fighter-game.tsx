@@ -2,6 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import {
+  computeCpuInput,
+  createInitialCpuState,
+  type CpuDifficulty,
+  type CpuState,
+} from "@/lib/stick-fighter/cpu";
 import {
   AIR_ATK_DUR,
   AIR_ATK_HIT_HIGH,
@@ -995,8 +1002,36 @@ export function StickFighterGame() {
     wasAirborne: [false, false],
     landSquash: [0, 0],
   });
+  const cpuStateRef = useRef<CpuState>(createInitialCpuState());
+  const vsCpuRef = useRef(true);
+  const cpuDifficultyRef = useRef<CpuDifficulty>("normal");
   const [hud, setHud] = useState<HudState>(INITIAL_HUD);
   const [roundOver, setRoundOver] = useState(false);
+  const [vsCpu, setVsCpu] = useState(true);
+  const [cpuDifficulty, setCpuDifficulty] = useState<CpuDifficulty>("normal");
+
+  useEffect(() => {
+    vsCpuRef.current = vsCpu;
+  }, [vsCpu]);
+
+  useEffect(() => {
+    cpuDifficultyRef.current = cpuDifficulty;
+  }, [cpuDifficulty]);
+
+  const mergeCpuInput = useCallback(
+    (game: GameState, inputs: GameInputs): GameInputs => {
+      if (!vsCpuRef.current) return inputs;
+      const cpuResult = computeCpuInput(
+        game,
+        1,
+        cpuDifficultyRef.current,
+        cpuStateRef.current,
+      );
+      cpuStateRef.current = cpuResult.nextState;
+      return { p1: inputs.p1, p2: cpuResult.input };
+    },
+    [],
+  );
 
   const syncHudFromGame = useCallback((state: GameState) => {
     const nextHud = hudFromState(state);
@@ -1032,6 +1067,7 @@ export function StickFighterGame() {
       wasAirborne: [false, false],
       landSquash: [0, 0],
     };
+    cpuStateRef.current = createInitialCpuState();
     setRoundOver(false);
     setHud(nextHud);
   }, []);
@@ -1101,7 +1137,10 @@ export function StickFighterGame() {
         lastFrameTimeRef.current = now;
       }
 
-      let inputsForDraw = snapshotInputs(keysRef.current);
+      let inputsForDraw = mergeCpuInput(
+        game,
+        snapshotInputs(keysRef.current),
+      );
 
       if (!game.roundOver) {
         const elapsed = now - lastFrameTimeRef.current;
@@ -1117,7 +1156,10 @@ export function StickFighterGame() {
           steps < MAX_STEPS_PER_FRAME &&
           !game.roundOver
         ) {
-          inputsForDraw = snapshotInputs(keysRef.current);
+          inputsForDraw = mergeCpuInput(
+            game,
+            snapshotInputs(keysRef.current),
+          );
           stepGame(game, inputsForDraw);
           accumulatorRef.current -= TICK_MS;
           steps += 1;
@@ -1168,10 +1210,67 @@ export function StickFighterGame() {
       window.removeEventListener("keydown", kd);
       window.removeEventListener("keyup", ku);
     };
-  }, [resetRound, syncHudFromGame]);
+  }, [mergeCpuInput, resetRound, syncHudFromGame]);
+
+  const setPlayer2Cpu = useCallback(
+    (enabled: boolean) => {
+      setVsCpu(enabled);
+      resetRound();
+    },
+    [resetRound],
+  );
+
+  const setDifficulty = useCallback(
+    (difficulty: CpuDifficulty) => {
+      setCpuDifficulty(difficulty);
+      resetRound();
+    },
+    [resetRound],
+  );
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground">
+            Player 2:
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            variant={vsCpu ? "default" : "outline"}
+            onClick={() => setPlayer2Cpu(true)}
+          >
+            CPU
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={vsCpu ? "outline" : "default"}
+            onClick={() => setPlayer2Cpu(false)}
+          >
+            Human
+          </Button>
+        </div>
+        {vsCpu && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-muted-foreground">
+              Difficulty:
+            </span>
+            {(["easy", "normal", "hard"] as const).map((level) => (
+              <Button
+                key={level}
+                type="button"
+                size="sm"
+                variant={cpuDifficulty === level ? "default" : "outline"}
+                onClick={() => setDifficulty(level)}
+              >
+                {level.charAt(0).toUpperCase() + level.slice(1)}
+              </Button>
+            ))}
+          </div>
+        )}
+      </div>
       <p className="text-xs leading-relaxed text-muted-foreground sm:text-sm">
         Five attacks, two blocks. HIGH ATTACK (W+F / ↑+K): swings overhead —
         beats neutral block, whiffs over low block. NEUTRAL ATTACK (F / K):
@@ -1249,26 +1348,35 @@ export function StickFighterGame() {
             Weapon:{" "}
             <span className="font-medium text-foreground">{hud.wp2}</span>
           </p>
-          <p>
-            Move{" "}
-            <kbd className="rounded border bg-background px-1">←</kbd> / {" "}
-            <kbd className="rounded border bg-background px-1">→</kbd> · Jump{" "}
-            <kbd className="rounded border bg-background px-1">↑</kbd> · Neutral{" "}
-            <kbd className="rounded border bg-background px-1">K</kbd> · Low{" "}
-            <kbd className="rounded border bg-background px-1">↓</kbd>+
-            <kbd className="rounded border bg-background px-1">K</kbd> · High{" "}
-            <kbd className="rounded border bg-background px-1">↑</kbd>+
-            <kbd className="rounded border bg-background px-1">K</kbd> ·
-            Uppercut{" "}
-            <kbd className="rounded border bg-background px-1">↓</kbd>+{" "}
-            <kbd className="rounded border bg-background px-1">;</kbd> · Block{" "}
-            <kbd className="rounded border bg-background px-1">L</kbd> · Block
-            low{" "}
-            <kbd className="rounded border bg-background px-1">↓</kbd>+
-            <kbd className="rounded border bg-background px-1">L</kbd> · Crouch{" "}
-            <kbd className="rounded border bg-background px-1">↓</kbd> · Weapon{" "}
-            <kbd className="rounded border bg-background px-1">P</kbd>
-          </p>
+          {vsCpu ? (
+            <p className="text-[11px] text-muted-foreground sm:text-xs">
+              CPU controls this fighter
+            </p>
+          ) : (
+            <p>
+              Move{" "}
+              <kbd className="rounded border bg-background px-1">←</kbd> / {" "}
+              <kbd className="rounded border bg-background px-1">→</kbd> · Jump{" "}
+              <kbd className="rounded border bg-background px-1">↑</kbd> ·
+              Neutral{" "}
+              <kbd className="rounded border bg-background px-1">K</kbd> · Low{" "}
+              <kbd className="rounded border bg-background px-1">↓</kbd>+
+              <kbd className="rounded border bg-background px-1">K</kbd> · High{" "}
+              <kbd className="rounded border bg-background px-1">↑</kbd>+
+              <kbd className="rounded border bg-background px-1">K</kbd> ·
+              Uppercut{" "}
+              <kbd className="rounded border bg-background px-1">↓</kbd>+{" "}
+              <kbd className="rounded border bg-background px-1">;</kbd> · Block{" "}
+              <kbd className="rounded border bg-background px-1">L</kbd> · Block
+              low{" "}
+              <kbd className="rounded border bg-background px-1">↓</kbd>+
+              <kbd className="rounded border bg-background px-1">L</kbd> ·
+              Crouch{" "}
+              <kbd className="rounded border bg-background px-1">↓</kbd> ·
+              Weapon{" "}
+              <kbd className="rounded border bg-background px-1">P</kbd>
+            </p>
+          )}
           <div className="mt-2 h-2 overflow-hidden rounded-full bg-background">
             <div
               className="h-full bg-red-500 transition-[width] duration-150"
