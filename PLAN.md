@@ -29,9 +29,9 @@ Living roadmap for the stick-fighting minigame (`/`). Agents and humans use this
 
 | Field | Value |
 |-------|-------|
-| **Phase** | *(none — pick the next unchecked near-term item)* |
+| **Phase** | *(none — next unchecked: phase 3 game feel)* |
 | **Item** | *(none)* |
-| **Agent note** | Phase 1 round flow complete — fixed BO3, countdown, match UI. |
+| **Agent note** | Phase 2 complete — Kyle playtested Practice mode; menu + stand-still dummy + auto-reset verified. |
 | **Last updated** | 2026-05-25 |
 
 ---
@@ -41,7 +41,7 @@ Living roadmap for the stick-fighting minigame (`/`). Agents and humans use this
 Work that exists today and future phases build on.
 
 - [x] **Geometric combat system** — five attacks, two blocks, hitbox/hurtbox/guard resolution (`simulation.ts`; landed in commit `fad9981`).
-- [x] **Game at home page** — `/` is the stick fighter, not the bar-inventory welcome page (`page.tsx`; `fad9981`).
+- [x] **Game at home page** — `/` is title screen + main menu; Vs/Practice/Multiplayer on separate routes (`page.tsx`, `/vs`, `/practice`; was direct game in `fad9981`).
 - [x] **Procedural stick animations** — poses driven by sim state in `drawStick()` (`stick-fighter-game.tsx`; no sprite sheets yet).
 - [x] **Single-round win state** — one fight to 0 HP, overlay, Space/Enter rematch (`roundOver` in sim + component).
 - [x] **CPU opponent** — reactive AI for P2, Easy/Normal/Hard, VS CPU toggle (`cpu.ts` + component wiring; `17a0ffb`).
@@ -61,17 +61,15 @@ Polish solo and couch play before networking or deployment.
 
 **Done when:** two players (or vs CPU) can play a full best-of-3 with obvious who won the match.
 
-### 2. Training mode
+### 2. Training mode [x]
 
-- [ ] Mode toggle: Fight / Training (alongside or instead of CPU difficulty when training)
-- [ ] Dummy opponent behaviors, e.g.:
-  - [ ] Always block neutral
-  - [ ] Always block low
-  - [ ] Always whiff (recovery practice for punishes)
-  - [ ] Stand still / no attack
-- [ ] Training HUD hints (which attack beats current dummy behavior)
+- [x] Main menu — title screen at `/`, routes for Vs / Practice / Multiplayer (`stick-fighter-home.tsx`, `/vs`, `/practice`, `/multiplayer`)
+- [x] Practice mode — single-round auto-reset, no BO3 overlays; P2 CPU/Human toggle retained
+- [x] Stand-still training dummy (`dummy.ts`)
 
-**Done when:** player can select a dummy behavior and practice one matchup without fighting a full CPU.
+**Done when:** player can practice without fighting a full CPU. ✓ Kyle playtested Practice — dummy, auto-reset, and P2 toggle work.
+
+**Deferred (optional later pass):** block-neutral / block-low / whiff dummy behaviors and training HUD hints — not required to close this phase.
 
 ### 3. Game feel
 
@@ -218,3 +216,6 @@ Notes from codebase/git checks. Update when completing phases.
 | 2026-05-25 | `git log`, `src/lib/stick-fighter/*`, `stick-fighter-game.tsx` | Combat refactor + home page in `fad9981`. CPU + `PLAN.md` + plan rules in `17a0ffb`. No best-of-3, training mode, hitstop, gamepad, characters, deploy, assets, or LLM taunts yet. |
 | 2026-05-25 | `PLAN.md` | Added phase 10 (LLM taunt on 25% HP); depends on phase 5 character prompts. |
 | 2026-05-25 | `simulation.ts`, `stick-fighter-game.tsx`, `npm run lint`, `npm run build` | Phase 1: fixed BO3 match scoring (component state), round/match overlays, 3-2-1 between-round countdown, weapon carry-over via `createNextRoundState`, Space/Enter rematch on match end only. |
+| 2026-05-25 | Manual playtest (Kyle) | Phase 1 confirmed working — rounds, countdown, and match flow behave as expected. |
+| 2026-05-25 | `dummy.ts`, route pages, `stick-fighter-game.tsx`, `npm run lint`, `npm run build` | Phase 2 v1: title + menu at `/`, `/vs` BO3 unchanged, `/practice` stand-still dummy + auto-reset, `/multiplayer` placeholder. |
+| 2026-05-25 | Manual playtest (Kyle) | Phase 2 complete — Practice mode verified; phase marked done at v1 scope (stand-still dummy). Extra dummy behaviors + HUD hints deferred. |

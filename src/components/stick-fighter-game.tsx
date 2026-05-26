@@ -9,6 +9,7 @@ import {
   type CpuDifficulty,
   type CpuState,
 } from "@/lib/stick-fighter/cpu";
+import { computeDummyInput } from "@/lib/stick-fighter/dummy";
 import {
   AIR_ATK_DUR,
   AIR_ATK_HIT_HIGH,
@@ -960,6 +961,9 @@ type MatchState = {
 const ROUNDS_TO_WIN = 2;
 const ROUND_RESULT_MS = 1000;
 const COUNTDOWN_START = 3;
+const PRACTICE_RESET_MS = 500;
+
+export type GameMode = "vs" | "practice";
 
 const INITIAL_MATCH: MatchState = {
   phase: "fighting",
@@ -1027,7 +1031,11 @@ function hudFromState(state: GameState): HudState {
   };
 }
 
-export function StickFighterGame() {
+type StickFighterGameProps = {
+  mode?: GameMode;
+};
+
+export function StickFighterGame({ mode = "vs" }: StickFighterGameProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const keysRef = useRef<Set<string>>(new Set());
@@ -1045,6 +1053,7 @@ export function StickFighterGame() {
   const vsCpuRef = useRef(true);
   const cpuDifficultyRef = useRef<CpuDifficulty>("normal");
   const matchRef = useRef<MatchState>(INITIAL_MATCH);
+  const modeRef = useRef<GameMode>(mode);
   const phaseTimerRef = useRef<number | null>(null);
   const roundEndProcessedRef = useRef(false);
   const [hud, setHud] = useState<HudState>(INITIAL_HUD);
@@ -1060,6 +1069,10 @@ export function StickFighterGame() {
     cpuDifficultyRef.current = cpuDifficulty;
   }, [cpuDifficulty]);
 
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
+
   const syncMatch = useCallback((next: MatchState) => {
     matchRef.current = next;
     setMatch(next);
@@ -1068,6 +1081,11 @@ export function StickFighterGame() {
   const mergeCpuInput = useCallback(
     (game: GameState, inputs: GameInputs): GameInputs => {
       if (!vsCpuRef.current) return inputs;
+
+      if (modeRef.current === "practice") {
+        return { p1: inputs.p1, p2: computeDummyInput() };
+      }
+
       const cpuResult = computeCpuInput(
         game,
         1,
@@ -1141,6 +1159,36 @@ export function StickFighterGame() {
     setHud(nextHud);
     syncMatch(INITIAL_MATCH);
   }, [resetFightRefs, syncMatch]);
+
+  const resetPracticeRound = useCallback(() => {
+    const nextState = createNextRoundState(gameRef.current);
+    const nextHud = hudFromState(nextState);
+
+    gameRef.current = nextState;
+    resetFightRefs();
+    lastHudRef.current = nextHud;
+    setHud(nextHud);
+  }, [resetFightRefs]);
+
+  const handlePracticeRoundEnd = useCallback((now: number) => {
+    if (roundEndProcessedRef.current) return;
+    roundEndProcessedRef.current = true;
+    phaseTimerRef.current = now;
+  }, []);
+
+  const tickPracticeReset = useCallback(
+    (now: number) => {
+      if (modeRef.current !== "practice") return;
+      if (!roundEndProcessedRef.current || phaseTimerRef.current === null) {
+        return;
+      }
+      if (now - phaseTimerRef.current < PRACTICE_RESET_MS) return;
+
+      resetPracticeRound();
+      phaseTimerRef.current = null;
+    },
+    [resetPracticeRound],
+  );
 
   const handleRoundEnd = useCallback(
     (game: GameState, now: number) => {
@@ -1288,17 +1336,32 @@ export function StickFighterGame() {
         snapshotInputs(keysRef.current),
       );
 
-      if (
-        matchRef.current.phase === "fighting" &&
-        game.roundOver &&
-        !roundEndProcessedRef.current
-      ) {
-        handleRoundEnd(game, now);
+      if (modeRef.current === "practice") {
+        if (
+          game.roundOver &&
+          !roundEndProcessedRef.current
+        ) {
+          handlePracticeRoundEnd(now);
+        }
+        tickPracticeReset(now);
+      } else {
+        if (
+          matchRef.current.phase === "fighting" &&
+          game.roundOver &&
+          !roundEndProcessedRef.current
+        ) {
+          handleRoundEnd(game, now);
+        }
+
+        tickMatchPhase(now);
       }
 
-      tickMatchPhase(now);
+      const canSimulate =
+        modeRef.current === "practice"
+          ? !game.roundOver
+          : matchRef.current.phase === "fighting" && !game.roundOver;
 
-      if (matchRef.current.phase === "fighting" && !game.roundOver) {
+      if (canSimulate) {
         const elapsed = now - lastFrameTimeRef.current;
         lastFrameTimeRef.current = now;
         accumulatorRef.current += Math.min(
@@ -1324,7 +1387,11 @@ export function StickFighterGame() {
         syncHudFromGame(game);
 
         if (game.roundOver && !roundEndProcessedRef.current) {
-          handleRoundEnd(game, now);
+          if (modeRef.current === "practice") {
+            handlePracticeRoundEnd(now);
+          } else {
+            handleRoundEnd(game, now);
+          }
         }
       }
 
@@ -1371,11 +1438,13 @@ export function StickFighterGame() {
       window.removeEventListener("keyup", ku);
     };
   }, [
+    handlePracticeRoundEnd,
     handleRoundEnd,
     mergeCpuInput,
     resetMatch,
     syncHudFromGame,
     tickMatchPhase,
+    tickPracticeReset,
   ]);
 
   const setPlayer2Cpu = useCallback(
@@ -1394,7 +1463,8 @@ export function StickFighterGame() {
     [resetMatch],
   );
 
-  const showOverlay = match.phase !== "fighting";
+  const isPractice = mode === "practice";
+  const showOverlay = !isPractice && match.phase !== "fighting";
   const nextRoundNumber =
     match.phase === "countdown"
       ? match.roundNumber + 1
@@ -1424,7 +1494,7 @@ export function StickFighterGame() {
             Human
           </Button>
         </div>
-        {vsCpu && (
+        {vsCpu && !isPractice && (
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-medium text-muted-foreground">
               Difficulty:
@@ -1454,17 +1524,19 @@ export function StickFighterGame() {
         blocks. Block neutral (G / L): chest guard. Block low (S+G / ↓+L):
         floor guard, also dodges high and neutral attacks.
       </p>
-      <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
-        <span className="font-medium text-sky-600 dark:text-sky-400">
-          Blue {match.p1RoundWins}
-        </span>
-        <span className="text-xs font-medium text-muted-foreground sm:text-sm">
-          Round {match.roundNumber}
-        </span>
-        <span className="font-medium text-red-500 dark:text-red-400">
-          Red {match.p2RoundWins}
-        </span>
-      </div>
+      {!isPractice && (
+        <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+          <span className="font-medium text-sky-600 dark:text-sky-400">
+            Blue {match.p1RoundWins}
+          </span>
+          <span className="text-xs font-medium text-muted-foreground sm:text-sm">
+            Round {match.roundNumber}
+          </span>
+          <span className="font-medium text-red-500 dark:text-red-400">
+            Red {match.p2RoundWins}
+          </span>
+        </div>
+      )}
       <div
         ref={wrapRef}
         className="relative overflow-hidden rounded-xl border border-border bg-card shadow-sm"
@@ -1552,7 +1624,9 @@ export function StickFighterGame() {
           </p>
           {vsCpu ? (
             <p className="text-[11px] text-muted-foreground sm:text-xs">
-              CPU controls this fighter
+              {isPractice
+                ? "Training dummy — stands still"
+                : "CPU controls this fighter"}
             </p>
           ) : (
             <p>
