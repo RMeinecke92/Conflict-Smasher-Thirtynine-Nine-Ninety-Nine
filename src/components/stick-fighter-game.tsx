@@ -24,6 +24,7 @@ import {
   UPPERCUT_HIT_LOW,
   attackArmMultiplier,
   createInitialGameState,
+  createNextRoundState,
   type BlockHeight,
   FLOOR,
   getBlockHeight,
@@ -944,6 +945,44 @@ const INITIAL_HUD: HudState = {
   msg: "",
 };
 
+type MatchPhase = "fighting" | "roundResult" | "countdown" | "matchEnd";
+type RoundWinner = "p1" | "p2" | null;
+
+type MatchState = {
+  phase: MatchPhase;
+  p1RoundWins: number;
+  p2RoundWins: number;
+  roundNumber: number;
+  countdownSeconds: number;
+  roundWinner: RoundWinner;
+};
+
+const ROUNDS_TO_WIN = 2;
+const ROUND_RESULT_MS = 1000;
+const COUNTDOWN_START = 3;
+
+const INITIAL_MATCH: MatchState = {
+  phase: "fighting",
+  p1RoundWins: 0,
+  p2RoundWins: 0,
+  roundNumber: 1,
+  countdownSeconds: 0,
+  roundWinner: null,
+};
+
+function roundWinnerLabel(winner: RoundWinner): string {
+  if (winner === "p1") return "Blue wins round!";
+  if (winner === "p2") return "Red wins round!";
+  return "";
+}
+
+function matchWinnerLabel(match: MatchState): string {
+  if (match.p1RoundWins > match.p2RoundWins) {
+    return `Blue wins match! ${match.p1RoundWins}–${match.p2RoundWins}`;
+  }
+  return `Red wins match! ${match.p2RoundWins}–${match.p1RoundWins}`;
+}
+
 function movementInput(
   keys: Set<string>,
   negativeKey: string,
@@ -1005,8 +1044,11 @@ export function StickFighterGame() {
   const cpuStateRef = useRef<CpuState>(createInitialCpuState());
   const vsCpuRef = useRef(true);
   const cpuDifficultyRef = useRef<CpuDifficulty>("normal");
+  const matchRef = useRef<MatchState>(INITIAL_MATCH);
+  const phaseTimerRef = useRef<number | null>(null);
+  const roundEndProcessedRef = useRef(false);
   const [hud, setHud] = useState<HudState>(INITIAL_HUD);
-  const [roundOver, setRoundOver] = useState(false);
+  const [match, setMatch] = useState<MatchState>(INITIAL_MATCH);
   const [vsCpu, setVsCpu] = useState(true);
   const [cpuDifficulty, setCpuDifficulty] = useState<CpuDifficulty>("normal");
 
@@ -1017,6 +1059,11 @@ export function StickFighterGame() {
   useEffect(() => {
     cpuDifficultyRef.current = cpuDifficulty;
   }, [cpuDifficulty]);
+
+  const syncMatch = useCallback((next: MatchState) => {
+    matchRef.current = next;
+    setMatch(next);
+  }, []);
 
   const mergeCpuInput = useCallback(
     (game: GameState, inputs: GameInputs): GameInputs => {
@@ -1050,27 +1097,126 @@ export function StickFighterGame() {
 
     if (roundOverRef.current !== state.roundOver) {
       roundOverRef.current = state.roundOver;
-      setRoundOver(state.roundOver);
     }
   }, []);
 
-  const resetRound = useCallback(() => {
-    const nextState = createInitialGameState();
-    const nextHud = hudFromState(nextState);
-
-    gameRef.current = nextState;
+  const resetFightRefs = useCallback(() => {
     accumulatorRef.current = 0;
     lastFrameTimeRef.current = null;
     roundOverRef.current = false;
-    lastHudRef.current = nextHud;
+    roundEndProcessedRef.current = false;
+    phaseTimerRef.current = null;
     landAnimRef.current = {
       wasAirborne: [false, false],
       landSquash: [0, 0],
     };
     cpuStateRef.current = createInitialCpuState();
-    setRoundOver(false);
-    setHud(nextHud);
   }, []);
+
+  const startNextRound = useCallback(() => {
+    const nextState = createNextRoundState(gameRef.current);
+    const nextHud = hudFromState(nextState);
+
+    gameRef.current = nextState;
+    resetFightRefs();
+    lastHudRef.current = nextHud;
+    setHud(nextHud);
+
+    syncMatch({
+      ...matchRef.current,
+      phase: "fighting",
+      roundNumber: matchRef.current.roundNumber + 1,
+      countdownSeconds: 0,
+      roundWinner: null,
+    });
+  }, [resetFightRefs, syncMatch]);
+
+  const resetMatch = useCallback(() => {
+    const nextState = createInitialGameState();
+    const nextHud = hudFromState(nextState);
+
+    gameRef.current = nextState;
+    resetFightRefs();
+    lastHudRef.current = nextHud;
+    setHud(nextHud);
+    syncMatch(INITIAL_MATCH);
+  }, [resetFightRefs, syncMatch]);
+
+  const handleRoundEnd = useCallback(
+    (game: GameState, now: number) => {
+      if (roundEndProcessedRef.current) return;
+      roundEndProcessedRef.current = true;
+
+      const winner: RoundWinner =
+        game.fighters[0].hp <= 0 ? "p2" : "p1";
+      const p1RoundWins =
+        matchRef.current.p1RoundWins + (winner === "p1" ? 1 : 0);
+      const p2RoundWins =
+        matchRef.current.p2RoundWins + (winner === "p2" ? 1 : 0);
+
+      if (p1RoundWins >= ROUNDS_TO_WIN || p2RoundWins >= ROUNDS_TO_WIN) {
+        syncMatch({
+          ...matchRef.current,
+          phase: "matchEnd",
+          p1RoundWins,
+          p2RoundWins,
+          roundWinner: winner,
+        });
+        return;
+      }
+
+      syncMatch({
+        ...matchRef.current,
+        phase: "roundResult",
+        p1RoundWins,
+        p2RoundWins,
+        roundWinner: winner,
+      });
+      phaseTimerRef.current = now;
+    },
+    [syncMatch],
+  );
+
+  const tickMatchPhase = useCallback(
+    (now: number) => {
+      const current = matchRef.current;
+
+      if (
+        current.phase === "roundResult" &&
+        phaseTimerRef.current !== null &&
+        now - phaseTimerRef.current >= ROUND_RESULT_MS
+      ) {
+        syncMatch({
+          ...current,
+          phase: "countdown",
+          countdownSeconds: COUNTDOWN_START,
+        });
+        phaseTimerRef.current = now;
+        return;
+      }
+
+      if (
+        current.phase === "countdown" &&
+        phaseTimerRef.current !== null
+      ) {
+        const elapsed = now - phaseTimerRef.current;
+        const secLeft = Math.max(
+          0,
+          COUNTDOWN_START - Math.floor(elapsed / 1000),
+        );
+
+        if (secLeft === 0) {
+          startNextRound();
+          return;
+        }
+
+        if (secLeft !== current.countdownSeconds) {
+          syncMatch({ ...current, countdownSeconds: secLeft });
+        }
+      }
+    },
+    [startNextRound, syncMatch],
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1108,8 +1254,8 @@ export function StickFighterGame() {
         e.preventDefault();
       }
       if (code === "Space" || code === "Enter") {
-        if (down && roundOverRef.current) {
-          resetRound();
+        if (down && matchRef.current.phase === "matchEnd") {
+          resetMatch();
           keysRef.current.delete("space");
           return;
         }
@@ -1142,7 +1288,17 @@ export function StickFighterGame() {
         snapshotInputs(keysRef.current),
       );
 
-      if (!game.roundOver) {
+      if (
+        matchRef.current.phase === "fighting" &&
+        game.roundOver &&
+        !roundEndProcessedRef.current
+      ) {
+        handleRoundEnd(game, now);
+      }
+
+      tickMatchPhase(now);
+
+      if (matchRef.current.phase === "fighting" && !game.roundOver) {
         const elapsed = now - lastFrameTimeRef.current;
         lastFrameTimeRef.current = now;
         accumulatorRef.current += Math.min(
@@ -1166,6 +1322,10 @@ export function StickFighterGame() {
         }
 
         syncHudFromGame(game);
+
+        if (game.roundOver && !roundEndProcessedRef.current) {
+          handleRoundEnd(game, now);
+        }
       }
 
       updateLandAnim(game.fighters, landLocal);
@@ -1210,23 +1370,35 @@ export function StickFighterGame() {
       window.removeEventListener("keydown", kd);
       window.removeEventListener("keyup", ku);
     };
-  }, [mergeCpuInput, resetRound, syncHudFromGame]);
+  }, [
+    handleRoundEnd,
+    mergeCpuInput,
+    resetMatch,
+    syncHudFromGame,
+    tickMatchPhase,
+  ]);
 
   const setPlayer2Cpu = useCallback(
     (enabled: boolean) => {
       setVsCpu(enabled);
-      resetRound();
+      resetMatch();
     },
-    [resetRound],
+    [resetMatch],
   );
 
   const setDifficulty = useCallback(
     (difficulty: CpuDifficulty) => {
       setCpuDifficulty(difficulty);
-      resetRound();
+      resetMatch();
     },
-    [resetRound],
+    [resetMatch],
   );
+
+  const showOverlay = match.phase !== "fighting";
+  const nextRoundNumber =
+    match.phase === "countdown"
+      ? match.roundNumber + 1
+      : match.roundNumber;
 
   return (
     <div className="space-y-4">
@@ -1282,6 +1454,17 @@ export function StickFighterGame() {
         blocks. Block neutral (G / L): chest guard. Block low (S+G / ↓+L):
         floor guard, also dodges high and neutral attacks.
       </p>
+      <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+        <span className="font-medium text-sky-600 dark:text-sky-400">
+          Blue {match.p1RoundWins}
+        </span>
+        <span className="text-xs font-medium text-muted-foreground sm:text-sm">
+          Round {match.roundNumber}
+        </span>
+        <span className="font-medium text-red-500 dark:text-red-400">
+          Red {match.p2RoundWins}
+        </span>
+      </div>
       <div
         ref={wrapRef}
         className="relative overflow-hidden rounded-xl border border-border bg-card shadow-sm"
@@ -1295,14 +1478,33 @@ export function StickFighterGame() {
           width={VIEW_W}
           height={VIEW_H}
         />
-        {roundOver && (
+        {showOverlay && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/80 backdrop-blur-sm">
-            <p className="font-heading text-xl font-semibold text-foreground">
-              {hud.msg}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Press Space or Enter to play again
-            </p>
+            {match.phase === "roundResult" && (
+              <p className="font-heading text-xl font-semibold text-foreground">
+                {roundWinnerLabel(match.roundWinner)}
+              </p>
+            )}
+            {match.phase === "countdown" && (
+              <>
+                <p className="font-heading text-lg font-semibold text-foreground">
+                  Round {nextRoundNumber}
+                </p>
+                <p className="font-heading text-5xl font-bold tabular-nums text-foreground">
+                  {match.countdownSeconds}
+                </p>
+              </>
+            )}
+            {match.phase === "matchEnd" && (
+              <>
+                <p className="font-heading text-xl font-semibold text-foreground">
+                  {matchWinnerLabel(match)}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Press Space or Enter to play again
+                </p>
+              </>
+            )}
           </div>
         )}
       </div>

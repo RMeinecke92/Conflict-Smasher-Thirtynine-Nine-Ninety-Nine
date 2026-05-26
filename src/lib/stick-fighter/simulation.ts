@@ -196,6 +196,13 @@ export function createInitialGameState(): GameState {
   };
 }
 
+export function createNextRoundState(previous: GameState): GameState {
+  const next = createInitialGameState();
+  next.fighters[0].weapon = previous.fighters[0].weapon;
+  next.fighters[1].weapon = previous.fighters[1].weapon;
+  return next;
+}
+
 export function isGrounded(fighter: Fighter) {
   return fighter.y >= FLOOR - 1;
 }
