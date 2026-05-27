@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   BIND_OFFSETS,
@@ -79,6 +79,7 @@ export function PoseCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const draggingRef = useRef<JointKey | null>(null);
+  const [draggingJoint, setDraggingJoint] = useState<JointKey | null>(null);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -145,7 +146,7 @@ export function PoseCanvas({
 
     for (const key of JOINT_KEYS) {
       const pos = layout.jointPositions[key];
-      const isActive = key === activeJoint || key === draggingRef.current;
+      const isActive = key === activeJoint || key === draggingJoint;
 
       ctx.beginPath();
       ctx.fillStyle = isActive ? "#fbbf24" : "#e2e8f0";
@@ -159,8 +160,13 @@ export function PoseCanvas({
         const deg = radiansToDegrees(pose.joints[key]);
         const label = `${deg.toFixed(0)}°`;
         ctx.font = "12px ui-monospace, monospace";
+        const labelX = pos.x + 10;
+        const labelY = pos.y - 10;
+        const metrics = ctx.measureText(label);
+        ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+        ctx.fillRect(labelX - 2, labelY - 12, metrics.width + 4, 14);
         ctx.fillStyle = "#fbbf24";
-        ctx.fillText(label, pos.x + 10, pos.y - 10);
+        ctx.fillText(label, labelX, labelY);
       }
     }
 
@@ -168,7 +174,7 @@ export function PoseCanvas({
     ctx.fillStyle = "#f87171";
     ctx.arc(layout.root.x, layout.root.y, 5, 0, Math.PI * 2);
     ctx.fill();
-  }, [pose, referenceImage, activeJoint]);
+  }, [pose, referenceImage, activeJoint, draggingJoint]);
 
   useEffect(() => {
     draw();
@@ -227,7 +233,9 @@ export function PoseCanvas({
     const joint = findJointAt(pt.x, pt.y, layout);
     if (!joint) return;
 
+    event.preventDefault();
     draggingRef.current = joint;
+    setDraggingJoint(joint);
     onActiveJointChange(joint);
     canvas.setPointerCapture(event.pointerId);
     updateJointFromPointer(joint, event.clientX, event.clientY);
@@ -236,14 +244,17 @@ export function PoseCanvas({
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const joint = draggingRef.current;
     if (!joint) return;
+    event.preventDefault();
     updateJointFromPointer(joint, event.clientX, event.clientY);
   };
 
-  const handlePointerUp = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (draggingRef.current) {
-      draggingRef.current = null;
-      const canvas = canvasRef.current;
-      canvas?.releasePointerCapture(event.pointerId);
+  const endDrag = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!draggingRef.current) return;
+    draggingRef.current = null;
+    setDraggingJoint(null);
+    const canvas = canvasRef.current;
+    if (canvas?.hasPointerCapture(event.pointerId)) {
+      canvas.releasePointerCapture(event.pointerId);
     }
   };
 
@@ -255,8 +266,8 @@ export function PoseCanvas({
       className="w-full max-w-full cursor-crosshair rounded-md border border-slate-700 bg-slate-900 touch-none"
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerUp}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
       aria-label="Pose skeleton canvas"
     />
   );

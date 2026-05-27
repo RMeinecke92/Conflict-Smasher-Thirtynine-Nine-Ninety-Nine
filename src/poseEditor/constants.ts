@@ -70,4 +70,4 @@ export const JOINT_ANGLE_LIMITS: Record<JointKey, { min: number; max: number }> 
 
 export const CANVAS_WIDTH = 720;
 export const CANVAS_HEIGHT = 480;
-export const JOINT_HIT_RADIUS = 14;
+export const JOINT_HIT_RADIUS = 18;
