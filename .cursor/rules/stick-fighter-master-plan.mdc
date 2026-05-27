@@ -5,12 +5,13 @@ alwaysApply: true
 
 # Stick Fighter Master Plan
 
-The stick-fighting game is the active product. The roadmap lives in **`PLAN.md`** at the repo root.
+The stick-fighting game is the active product. The roadmap lives in **`PLAN.md`** at the repo root. Product vision and long-range design live in **`Docs/Master-Stroke.md`**.
 
 ## Before stick-fighter work
 
 1. Read `PLAN.md` — especially **Currently active** and the next unchecked item.
-2. Skim recent git history (`git log -5`, `git status`) and reconcile with plan checkboxes. If the plan disagrees with the code, fix the plan or note the discrepancy in **Verification log**.
+2. For narrative, mechanics thesis, or Master Stroke phase questions, skim **`Docs/Master-Stroke.md`** (do not confuse its phase numbers with `PLAN.md` phase numbers).
+3. Skim recent git history (`git log -5`, `git status`) and reconcile with plan checkboxes. If the plan disagrees with the code, fix the plan or note the discrepancy in **Verification log**.
 
 ## While working
 

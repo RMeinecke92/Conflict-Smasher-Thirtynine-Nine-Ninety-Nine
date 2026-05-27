@@ -2,6 +2,8 @@
 
 Living roadmap for the stick-fighting minigame (`/`). Agents and humans use this file to track what is done, what is in progress, and what comes next.
 
+**Product vision:** [`Docs/Master-Stroke.md`](Docs/Master-Stroke.md) — *Master Stroke* design doc (narrative, mechanics thesis, long-range phased plan). This file stays tactical; the design doc is the north star when scope or identity questions come up.
+
 **Primary code areas**
 
 | Area | Path |
@@ -219,3 +221,4 @@ Notes from codebase/git checks. Update when completing phases.
 | 2026-05-25 | Manual playtest (Kyle) | Phase 1 confirmed working — rounds, countdown, and match flow behave as expected. |
 | 2026-05-25 | `dummy.ts`, route pages, `stick-fighter-game.tsx`, `npm run lint`, `npm run build` | Phase 2 v1: title + menu at `/`, `/vs` BO3 unchanged, `/practice` stand-still dummy + auto-reset, `/multiplayer` placeholder. |
 | 2026-05-25 | Manual playtest (Kyle) | Phase 2 complete — Practice mode verified; phase marked done at v1 scope (stand-still dummy). Extra dummy behaviors + HUD hints deferred. |
+| 2026-05-27 | `Docs/Master-Stroke.md` | Added Master Stroke design doc v1.0; linked from `PLAN.md`, README, stick-fighter agent rule. |
