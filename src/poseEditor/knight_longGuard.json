@@ -1,0 +1,20 @@
+{
+  "name": "knight_longGuard",
+  "character": "knight",
+  "rootPosition": { "x": 360, "y": 298 },
+  "rootRotation": 0,
+  "joints": {
+    "waist": 0.12,
+    "neck": -0.05,
+    "shoulderL": -0.35,
+    "shoulderR": 0.55,
+    "elbowL": -0.85,
+    "elbowR": -1.1,
+    "hipL": 0.08,
+    "hipR": -0.06,
+    "kneeL": 0.18,
+    "kneeR": 0.22
+  },
+  "notes": "Long guard stance — lead arm extended, rear arm chambered. Sample pose for PD target authoring.",
+  "referenceImage": "knight_longGuard_ref.png"
+}
