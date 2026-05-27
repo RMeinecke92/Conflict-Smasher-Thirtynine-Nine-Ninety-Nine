@@ -1,16 +1,28 @@
 # Master Stroke — Design Doc v1.0
 
-*The foundational design document. A living spec — update it when reality forces updates, otherwise treat it as the source of truth.*
+*Long-term vision — the fruit tree in the distance, not the week's chores.*
+
+## What this document is (and is not)
+
+**This file is an ideal.** It describes the game the project is *growing toward*: narrative frame, art-history thesis, target mechanics, campaign fantasy, and a far-off phased map. Read it for direction, tone, and “why we might build X someday.”
+
+**This file is not the work list.** Do not treat it as a sprint backlog, a promise of what ships next, or a checklist agents must close. The guys cannot stand up yet. The art pipeline does not exist. Most of this doc is intentionally ahead of the code.
+
+**The bar that actually matters right now:** two stick figures hitting each other in a way that feels *fun*. Everything in this document is optional until that exists — and many sections (campaign, N renderers, full route) may stay optional for a long time.
+
+**What to work from instead:** root **`PLAN.md`** — the stick-fighter master plan. That is where “what we are doing now” lives: checkboxes, **Currently active**, verification log. Agents and humans execute against `PLAN.md`, not against Master Stroke phase numbers below.
 
 ## How this doc fits the repo
 
 | Document | Role |
 |----------|------|
-| **`Docs/Master-Stroke.md`** (this file) | Product vision, narrative, mechanics thesis, and phased plan for *Master Stroke*. |
-| **`PLAN.md`** (repo root) | Tactical roadmap for the **current stick-fighter prototype** — what to build next in code today. |
-| **`Docs/Master Plan.md`** | Original Next.js template / bar-app build plan (substrate, not the game pivot). |
+| **`PLAN.md`** (repo root) | **Execution.** What to build next, what's in progress, what's done. The only file that gates day-to-day work. |
+| **`Docs/Master-Stroke.md`** (this file) | **Vision.** Why the project exists, what “done” might look like years out, ideas to preserve so they are not lost. |
+| **`Docs/Master Plan.md`** | Template / bar-app origin story (unrelated to game tasks unless Ryan redirects). |
 
-When tactical work and this doc disagree, **update this doc** if the pivot is intentional, or **update `PLAN.md`** if the prototype is deliberately ahead/behind the vision. Note significant reconciliations in `PLAN.md` **Verification log**.
+**When vision and reality disagree, reality wins.** The prototype is allowed — expected — to look nothing like campaign duels or ukiyo-e renderers for a long time. If a big pivot happens, update this doc so the ideal stays honest. You do not need to “reconcile” every `PLAN.md` checkbox with Master Stroke phases.
+
+**For AI agents:** skim this file only when the human asks about vision, narrative, or long-range scope — or when deciding whether a *proposed* feature belongs in the dream game vs. the current prototype. Never pull new tasks from this doc into a session unless the human explicitly asks. Default scope: make stick combat better per `PLAN.md`.
 
 ---
 
@@ -163,11 +175,11 @@ Honest open problems. Naming them helps prioritize.
 
 ---
 
-## Phased Plan
+## Phased Plan (aspirational — not `PLAN.md`)
 
-Each phase has a target, a definition of done, and an agentic design move — a tool to build *before* asking the AI to help with that phase's work.
+The phases below are a **distant ladder**, not the repo's active roadmap. They describe a possible order of arrival if the project keeps climbing toward Master Stroke. **Do not implement or checkbox these in place of `PLAN.md`.** Today’s work might be “stand without exploding” or “two sticks feel good” — that can be true for years while Phase 9 (full campaign) remains a paragraph on paper.
 
-*Note: phase numbers here are the **Master Stroke** roadmap. They are not the same as numbered phases in root `PLAN.md` (round flow, deploy, netcode, etc.). Reconcile both when closing a Master Stroke phase that subsumes prototype work.*
+Each phase has a target, a definition of done, and an agentic design move — a tool that would help *when* that era arrives, not necessarily before the next `PLAN.md` item.
 
 ### Phase 1 — Foundations (in progress)
 
@@ -260,4 +272,4 @@ This is also the protection against AI-as-yak-shaver. An AI given vague prompts 
 
 ---
 
-*Document version: 1.0. Last imported to repo: 2026-05-27.*
+*Document version: 1.0. Vision framing clarified 2026-05-27. Last imported to repo: 2026-05-27.*
