@@ -122,7 +122,8 @@ Opens a browser view of the local SQLite database.
 - `src/lib/db.ts` creates the shared Prisma client.
 - `prisma/schema.prisma` describes the database tables.
 - `prisma/migrations/` contains the database history.
-- `Docs/Master Plan.md` explains the build plan and design choices.
+- `Docs/Master Plan.md` explains the template build plan and design choices.
+- `Docs/Master-Stroke.md` is the **long-term vision** for Master Stroke (ideal on the horizon — not the work list). Root **`PLAN.md`** is what to build next for the stick fighter.
 - `.cursor/rules/` holds standing instructions for the AI in Cursor.
 - `.cursor/skills/` holds **skills** — focused workflows for specific moments (see below).
 
