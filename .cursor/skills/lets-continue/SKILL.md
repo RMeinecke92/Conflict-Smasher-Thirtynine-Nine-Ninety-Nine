@@ -14,9 +14,10 @@ Use this skill when Kyle comes back after a break and needs the thread restored 
 1. Re-orient yourself by reading the always-on project rule at `.cursor/rules/template-operating-posture.mdc`.
 
 2. Read the master plan:
-   - Open **`PLAN.md`** at the repo root (Stick Fighter roadmap).
+   - Open **`PLAN.md`** at the repo root (Stick Fighter roadmap) — **this is the work list.**
    - Follow **`.cursor/rules/stick-fighter-master-plan.mdc`** for how plan status is tracked.
    - Note **Currently active** (what is `[~]` in progress) and the first unchecked near-term item.
+   - **`Docs/Master-Stroke.md`** is long-term vision only; mention it if Kyle asks about the big picture, not as "what's next" unless they redirected scope.
 
 3. Check recent work:
    - Read recent git history (`git log -10 --oneline`, `git status`).

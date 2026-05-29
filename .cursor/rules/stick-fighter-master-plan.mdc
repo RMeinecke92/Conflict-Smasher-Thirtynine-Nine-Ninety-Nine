@@ -5,12 +5,13 @@ alwaysApply: true
 
 # Stick Fighter Master Plan
 
-The stick-fighting game is the active product. The roadmap lives in **`PLAN.md`** at the repo root.
+The stick-fighting game is the active product. **Only `PLAN.md` is the execution roadmap.** Long-term vision lives in **`Docs/Master-Stroke.md`** — an ideal (“fruit tree in the distance”), not a task list. Do not scope-creep from the vision doc; the human’s near-term bar is two sticks hitting each other in a fun way.
 
 ## Before stick-fighter work
 
-1. Read `PLAN.md` — especially **Currently active** and the next unchecked item.
+1. Read **`PLAN.md`** — especially **Currently active** and the next unchecked item. Work from that file only unless the human explicitly asks for vision-doc scope.
 2. Skim recent git history (`git log -5`, `git status`) and reconcile with plan checkboxes. If the plan disagrees with the code, fix the plan or note the discrepancy in **Verification log**.
+3. **`Docs/Master-Stroke.md`** — read only when the human asks about narrative, long-range direction, or “does this fit Master Stroke?” Never treat its phased plan as `PLAN.md` phases; never add vision-doc items to **Currently active** without explicit human request.
 
 ## While working
 
