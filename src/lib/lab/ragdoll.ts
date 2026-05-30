@@ -91,7 +91,13 @@ function pinLeg(
   return pin(bodyA, pointA, bodyB, pointB, LEG_JOINT);
 }
 
-/** Soft hip–foot spring: holds leg chain extended when the foot is planted. */
+/**
+ * Stiff hip–foot spring: holds the leg chain extended so a planted foot can
+ * carry the body's weight without the knee buckling. Because the foot is a
+ * static anchor while standing, a near-rigid spring here just fixes the hip at
+ * standing height — it cannot launch the body (the reaction goes into the
+ * floor, not the torso).
+ */
 function legSpring(
   torso: Matter.Body,
   hipLocal: Matter.Vector,
@@ -103,14 +109,16 @@ function legSpring(
     pointA: hipLocal,
     bodyB: foot,
     pointB: { x: 0, y: -SEGMENT.FOOT_H * 0.5 },
-    stiffness: 0.88,
-    damping: 0.24,
+    stiffness: 0.97,
+    damping: 0.4,
     length,
   });
 }
 
-export function createRagdoll(spawnX = VIEW_W * 0.5): Ragdoll {
-  const filter = createCharacterCollisionFilter();
+export function createRagdoll(
+  spawnX = VIEW_W * 0.5,
+  filter: Matter.ICollisionFilter = createCharacterCollisionFilter(),
+): Ragdoll {
   const { TORSO_W, TORSO_H, HEAD_R, UPPER_LIMB_H, LOWER_LIMB_H, LIMB_W, HAND_R, FOOT_W, FOOT_H } =
     SEGMENT;
 
@@ -299,13 +307,21 @@ export function createRagdoll(spawnX = VIEW_W * 0.5): Ragdoll {
   Body.setPosition(footR, { x: spawnX + hipOffset, y: footY });
 
   return {
-    id: filter.category,
+    id: filter.category ?? 0,
     parts,
     constraints,
     spawnX,
     spawnHipY: (spawnHipL.y + spawnHipR.y) * 0.5,
     ageTicks: 0,
     feetPlanted: true,
+    gait: {
+      phase: "stand",
+      stepT: 0,
+      stepDur: 0,
+      swingFromX: spawnX - hipOffset,
+      swingToX: spawnX - hipOffset,
+      lastDir: 0,
+    },
   };
 }
 

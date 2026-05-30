@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { StickFighterShell } from "@/components/stick-fighter-shell";
-import { StickFighterGame } from "@/components/stick-fighter-game";
+import { DuelGame } from "@/components/duel-game";
 import {
   Card,
   CardContent,
@@ -10,24 +10,24 @@ import {
 } from "@/components/ui/card";
 
 export const metadata: Metadata = {
-  title: "Vs — Conflict Smasher",
-  description: "Best-of-3 stick fighting vs CPU or local two-player.",
+  title: "Duel — Master Stroke",
+  description: "Physics weapon duel — Longsword vs Pole Hammer, two players or vs CPU.",
 };
 
 export default function VsPage() {
   return (
     <StickFighterShell
-      title="Vs"
-      description="Best-of-3 match vs CPU or a friend on the same keyboard. Click the game area if keys don't respond."
+      title="Duel"
+      description="Physics weapon fight. Pick weapons, then move and strike — clean hits knock the opponent down. Click the arena if keys don't respond."
     >
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="font-heading text-lg font-semibold">
-            Fight
+            Arena
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <StickFighterGame mode="vs" />
+          <DuelGame mode="vs" />
         </CardContent>
       </Card>
     </StickFighterShell>

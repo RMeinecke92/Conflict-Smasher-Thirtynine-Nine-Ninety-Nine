@@ -6,7 +6,7 @@ import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 
 const MENU_ITEMS = [
-  { href: "/vs", label: "Vs", key: "1" },
+  { href: "/vs", label: "Duel", key: "1" },
   { href: "/practice", label: "Practice", key: "2" },
   { href: "/multiplayer", label: "Multiplayer", key: "3" },
 ] as const;

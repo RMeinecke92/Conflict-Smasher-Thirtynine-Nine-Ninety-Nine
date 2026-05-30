@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { StickFighterShell } from "@/components/stick-fighter-shell";
-import { StickFighterGame } from "@/components/stick-fighter-game";
+import { DuelGame } from "@/components/duel-game";
 import {
   Card,
   CardContent,
@@ -10,15 +10,15 @@ import {
 } from "@/components/ui/card";
 
 export const metadata: Metadata = {
-  title: "Practice — Conflict Smasher",
-  description: "Free spar against a stand-still training dummy.",
+  title: "Practice — Master Stroke",
+  description: "Drill weapon strikes against a stand-still dummy in long guard.",
 };
 
 export default function PracticePage() {
   return (
     <StickFighterShell
       title="Practice"
-      description="Free spar — dummy stands still. Toggle P2 to Human for couch play."
+      description="The dummy just holds long guard. Drill your reach, timing, and knockdowns with either weapon."
     >
       <Card>
         <CardHeader className="pb-2">
@@ -27,7 +27,7 @@ export default function PracticePage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <StickFighterGame mode="practice" />
+          <DuelGame mode="practice" />
         </CardContent>
       </Card>
     </StickFighterShell>

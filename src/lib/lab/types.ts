@@ -18,6 +18,22 @@ export type BodyPartId =
   | "lowerLegR"
   | "footR";
 
+/** Which foot (if any) is mid-swing during a walk cycle. */
+export type GaitPhase = "stand" | "swingL" | "swingR";
+
+export type GaitState = {
+  phase: GaitPhase;
+  /** Ticks elapsed in the current swing. */
+  stepT: number;
+  /** Ticks the current swing lasts. */
+  stepDur: number;
+  /** Swing foot start / target x for interpolation. */
+  swingFromX: number;
+  swingToX: number;
+  /** Last walk direction we processed (-1, 0, 1). */
+  lastDir: -1 | 0 | 1;
+};
+
 export type Ragdoll = {
   id: number;
   parts: Record<BodyPartId, Body>;
@@ -29,6 +45,8 @@ export type Ragdoll = {
   ageTicks: number;
   /** Feet pinned static while idle-standing — released for walk / ragdoll. */
   feetPlanted: boolean;
+  /** Procedural walk-cycle state. */
+  gait: GaitState;
 };
 
 export type LabWorld = {

@@ -11,6 +11,12 @@ import {
 } from "@/lib/stick-fighter/cpu";
 import { computeDummyInput } from "@/lib/stick-fighter/dummy";
 import {
+  advanceGait,
+  createGaitState,
+  footLift,
+  type GaitState,
+} from "@/lib/stick-fighter/gait";
+import {
   AIR_ATK_DUR,
   AIR_ATK_HIT_HIGH,
   AIR_ATK_HIT_LOW,
@@ -233,6 +239,25 @@ function afterDrawDecrementLandSquash(anim: LandAnim) {
   }
 }
 
+/** Draw one leg from hip to a planted foot, with a forward knee bend. */
+function drawGaitLeg(
+  ctx: CanvasRenderingContext2D,
+  hipX: number,
+  hipY: number,
+  footX: number,
+  footY: number,
+  facing: 1 | -1,
+  lift: number,
+) {
+  const kneeX = (hipX + footX) / 2 + facing * (2.5 + lift * 0.45);
+  const kneeY = (hipY + footY) / 2 + 1.5;
+  ctx.beginPath();
+  ctx.moveTo(hipX, hipY);
+  ctx.lineTo(kneeX, kneeY);
+  ctx.lineTo(footX, footY);
+  ctx.stroke();
+}
+
 function drawStick(
   ctx: CanvasRenderingContext2D,
   f: Fighter,
@@ -241,6 +266,7 @@ function drawStick(
   fighterIndex: 0 | 1,
   landAnim: LandAnim,
   playerInput: PlayerInput,
+  gait: GaitState,
 ) {
   const W = WEAPONS[f.weapon];
   const grounded = isGrounded(f);
@@ -278,11 +304,14 @@ function drawStick(
     f.atkFrame === 0 &&
     !f.crouching &&
     !committingAttack;
-  const leg0 = Math.sin(time * 0.25);
-  const leg1 = Math.sin(time * 0.25 + Math.PI);
-  const liftL = walking ? Math.max(0, leg0) * 5 : 0;
-  const liftR = walking ? Math.max(0, leg1) * 5 : 0;
-  const strideSpread = walking ? leg0 * 4 * f.facing : 0;
+
+  // Step-and-slide footwork. Advance the foot anchors once per drawn frame
+  // while grounded; the feet plant in the world and the body slides between
+  // them. Skip while airborne (legs are drawn relative to the body instead).
+  if (grounded) {
+    advanceGait(gait, f.x, f.vx, f.facing, walking);
+  }
+  const armSwing = Math.sin(time * 0.25 + Math.PI);
 
   let sweepLean = 0;
   let lowSwingDrop = 0;
@@ -466,7 +495,7 @@ function drawStick(
     footY - 30 + breath * (1 - depth) * 0.55 + hipDrop + lowSwingDrop * 0.5;
 
   const offArmSwing =
-    walking ? -leg1 * 6 * (f.vx >= 0 ? 1 : -1) * f.facing : 0;
+    walking ? -armSwing * 6 * (f.vx >= 0 ? 1 : -1) * f.facing : 0;
 
   ctx.save();
   const pivotY =
@@ -846,17 +875,22 @@ function drawStick(
       ctx.lineTo(kneeXR, kneeY);
       ctx.lineTo(footXR, footY);
       ctx.stroke();
+    } else if (!grounded) {
+      const lfX = cx - 10 * f.facing;
+      const rfX = cx + 10 * f.facing;
+      ctx.beginPath();
+      ctx.moveTo(shX, hipY);
+      ctx.lineTo(lfX, footY);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(shX, hipY);
+      ctx.lineTo(rfX, footY);
+      ctx.stroke();
     } else {
-      const lfX = cx - 10 * f.facing - strideSpread;
-      const rfX = cx + 10 * f.facing + strideSpread;
-      ctx.beginPath();
-      ctx.moveTo(shX, hipY);
-      ctx.lineTo(lfX, footY - liftL);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(shX, hipY);
-      ctx.lineTo(rfX, footY - liftR);
-      ctx.stroke();
+      const rearLift = footLift(gait, "rear");
+      const leadLift = footLift(gait, "lead");
+      drawGaitLeg(ctx, shX, hipY, gait.rearX, footY - rearLift, f.facing, rearLift);
+      drawGaitLeg(ctx, shX, hipY, gait.leadX, footY - leadLift, f.facing, leadLift);
     }
   } else {
     if (showBlockPose && blockPoseHeight === "low") {
@@ -1049,6 +1083,10 @@ export function StickFighterGame({ mode = "vs" }: StickFighterGameProps) {
     wasAirborne: [false, false],
     landSquash: [0, 0],
   });
+  const gaitRef = useRef<[GaitState, GaitState]>([
+    createGaitState(),
+    createGaitState(),
+  ]);
   const cpuStateRef = useRef<CpuState>(createInitialCpuState());
   const vsCpuRef = useRef(true);
   const cpuDifficultyRef = useRef<CpuDifficulty>("normal");
@@ -1128,6 +1166,7 @@ export function StickFighterGame({ mode = "vs" }: StickFighterGameProps) {
       wasAirborne: [false, false],
       landSquash: [0, 0],
     };
+    gaitRef.current = [createGaitState(), createGaitState()];
     cpuStateRef.current = createInitialCpuState();
   }, []);
 
@@ -1419,8 +1458,9 @@ export function StickFighterGame({ mode = "vs" }: StickFighterGameProps) {
       drawBackground(ctx, t);
 
       const [a, b] = game.fighters;
-      drawStick(ctx, a, "#38bdf8", t, 0, landLocal, inputsForDraw.p1);
-      drawStick(ctx, b, "#f87171", t, 1, landLocal, inputsForDraw.p2);
+      const gaits = gaitRef.current;
+      drawStick(ctx, a, "#38bdf8", t, 0, landLocal, inputsForDraw.p1, gaits[0]);
+      drawStick(ctx, b, "#f87171", t, 1, landLocal, inputsForDraw.p2, gaits[1]);
 
       drawForegroundVignette(ctx);
 

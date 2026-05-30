@@ -1,3 +1,4 @@
+
 # Master Stroke — Design Doc v1.0
 
 *Long-term vision — the fruit tree in the distance, not the week's chores.*

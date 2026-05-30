@@ -69,22 +69,24 @@ export function applyLegExtensionAssist(ragdoll: Ragdoll, strength: number) {
 }
 
 /**
- * If hips sank below spawn height while feet are down, apply capped upward support.
+ * If hips sank below spawn height while at least one foot is planted, apply
+ * capped upward support. Only one foot needs to be grounded so the body stays
+ * held up mid-stride (the other foot is swinging).
  */
 export function applyHipHeightAssist(ragdoll: Ragdoll, strength: number) {
   if (strength <= 0) return;
 
   const { footL, footR, torso } = ragdoll.parts;
-  if (!footGrounded(footL.position.y) || !footGrounded(footR.position.y)) return;
+  if (!footGrounded(footL.position.y) && !footGrounded(footR.position.y)) return;
 
   const hipL = bodyWorldPoint(torso, { x: -HIP_LOCAL.x, y: HIP_LOCAL.y });
   const hipR = bodyWorldPoint(torso, { x: HIP_LOCAL.x, y: HIP_LOCAL.y });
   const hipY = (hipL.y + hipR.y) * 0.5;
   const sink = hipY - ragdoll.spawnHipY;
-  if (sink <= 3) return;
+  if (sink <= 2) return;
 
   const gBudget = gravityAccelPerStep();
-  const forceMag = Math.min((sink - 3) * 0.00022 * strength, gBudget * torso.mass * 1.35);
+  const forceMag = Math.min((sink - 2) * 0.00032 * strength, gBudget * torso.mass * 2);
   Body.applyForce(torso, torso.position, { x: 0, y: -forceMag });
 }
 

@@ -7,7 +7,7 @@ import {
   applyLegExtensionAssist,
   getHipHeight,
 } from "@/lib/lab/leg-support";
-import { applyFootAnchors } from "@/lib/lab/foot-anchor";
+import { releaseAllFootAnchors } from "@/lib/lab/foot-anchor";
 import { getBalanceParams } from "@/lib/lab/runtime-tuning";
 import type { BalanceState, BodyPartId, Ragdoll } from "@/lib/lab/types";
 
@@ -70,13 +70,11 @@ function clampVerticalSpeed(body: Matter.Body, max: number) {
 const SPAWN_BOOST_TICKS = 120;
 const SPAWN_BOOST_MULT = 2.5;
 
-export function applyUprightTorque(
-  ragdoll: Ragdoll,
-  uprightStrength: number,
-  walking = false,
-) {
+export function applyUprightTorque(ragdoll: Ragdoll, uprightStrength: number) {
   if (uprightStrength <= 0) {
-    applyFootAnchors(ragdoll, uprightStrength, true);
+    // Fully collapsed (knockdown): let the feet ragdoll. The gait controller
+    // re-plants them once balance recovers.
+    releaseAllFootAnchors(ragdoll);
     return;
   }
 
@@ -86,8 +84,6 @@ export function applyUprightTorque(
       ? SPAWN_BOOST_MULT * (1 - ragdoll.ageTicks / SPAWN_BOOST_TICKS) + 1
       : 1;
   const effectiveStrength = uprightStrength * spawnBoost;
-
-  applyFootAnchors(ragdoll, uprightStrength, walking);
 
   const params = getBalanceParams();
   const torso = ragdoll.parts.torso;

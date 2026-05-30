@@ -11,18 +11,14 @@ import {
   toggleAutoTuner,
 } from "@/lib/lab/auto-tuner";
 import { MAX_STEPS_PER_FRAME, TICK_MS, VIEW_H, VIEW_W } from "@/lib/lab/constants";
+import { updateGait } from "@/lib/lab/gait";
 import { drawLabScene } from "@/lib/lab/render";
-import {
-  applyImpulseToPart,
-  applyWalkForce,
-  findNearestPart,
-} from "@/lib/lab/ragdoll";
+import { applyImpulseToPart, findNearestPart } from "@/lib/lab/ragdoll";
 import {
   getBalanceParams,
   nudgeBalanceParam,
   resetBalanceParams,
 } from "@/lib/lab/runtime-tuning";
-import { TUNING } from "@/lib/lab/tuning";
 import type { BalanceState, CharacterState, LabWorld } from "@/lib/lab/types";
 import {
   applyUprightTorque,
@@ -215,14 +211,10 @@ export function PhysicsTestbed() {
 
       let steps = 0;
       while (accumulatorRef.current >= TICK_MS && steps < MAX_STEPS_PER_FRAME) {
-        applyUprightTorque(
-          world.character,
-          balanceRef.current.uprightStrength,
-          walkDir !== 0,
-        );
+        applyUprightTorque(world.character, balanceRef.current.uprightStrength);
 
         if (balanceRef.current.mode === "active") {
-          applyWalkForce(world.character, walkDir, TUNING.WALK_FORCE);
+          updateGait(world.character, walkDir);
         }
 
         stepWorld(world.engine, TICK_MS);

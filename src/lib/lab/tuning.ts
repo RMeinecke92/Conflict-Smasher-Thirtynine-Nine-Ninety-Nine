@@ -41,10 +41,19 @@ export const TUNING = {
   WALK_FORCE: 0.002,
   WALK_FORCE_EXHAUSTED: 0.001,
 
+  // Procedural walk cycle (stepping gait)
+  WALK_STEP_LENGTH: 26, // px a foot advances per step
+  WALK_STEP_TICKS: 16, // ticks one foot spends mid-swing (@60Hz ≈ 0.27s)
+  WALK_STEP_LIFT: 14, // px peak foot lift at mid-swing
+  WALK_SPEED: 2, // max torso x-velocity while catching up to the feet (px/tick)
+  WALK_LEAD: 1.5, // px the torso leans ahead of the foot center while walking
+  WALK_TRACK: 0.18, // how strongly the torso tracks toward its support base
+  WALK_UPRIGHT_BOOST: 1.5, // extra torso-upright authority while walking
+
   // Physics character balance — defaults; auto-tuner adjusts copies in runtime-tuning.ts
   TORSO_UPRIGHT_TORQUE: 0.42,
   TORSO_UPRIGHT_DAMPING: 0.055,
-  LEG_STRAIGHTEN_TORQUE: 0.18,
+  LEG_STRAIGHTEN_TORQUE: 0.24,
   LEG_STRAIGHTEN_DAMPING: 0.032,
   LEG_EXTENSION_STRENGTH: 1.4,
   HIP_SUPPORT_STRENGTH: 1.8,
